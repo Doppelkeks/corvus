@@ -20,6 +20,9 @@ describe("GPU-only graph surface architecture", () => {
         expect(fontAtlas).not.toContain("OffscreenCanvas");
         expect(fontAtlas).not.toContain("createElement");
         expect(fontAtlas).not.toContain('getContext("2d"');
+        expect(fontAtlas).toContain("echo-ui-semibold-sdf.png");
+        expect(fontAtlas).toContain("copyExternalImageToTexture");
+        expect(fontAtlas).toContain("GPUTextureUsage.RENDER_ATTACHMENT");
         expect(fontAtlas).toContain("queue.writeTexture");
     });
 
@@ -47,7 +50,7 @@ describe("GPU-only graph surface architecture", () => {
         expect(fontAtlas).toContain('magFilter: "linear"');
         expect(fontAtlas).toContain('minFilter: "linear"');
         expect(fontAtlas).toContain("SIGNED_DISTANCE_RANGE");
-        expect(fontAtlas).toContain("strokeGlyphMask");
+        expect(fontAtlas).toContain("uploadUiFontAtlas");
         expect(strokeFont).toContain('a: "2,4.5');
         expect(shaders).toContain("round(unsnappedScreen * pixelRatio)");
         expect(shaders).toContain("fwidth(sample.a)");

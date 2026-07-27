@@ -91,9 +91,11 @@ node record. The canvas remains viewport-sized even when graph coordinates are
 very large.
 
 The surrounding product may use ordinary HTML for dock panels and forms; those
-are application UI, not part of the graph surface. Glyphs come from packed
-bitmap data uploaded directly to a GPU texture, so the renderer has no hidden
-Canvas2D or DOM fallback.
+are application UI, not part of the graph surface. Glyphs come from a
+high-resolution Segoe UI Semibold signed-distance atlas uploaded directly to a
+GPU texture, so the renderer has no hidden Canvas2D or DOM fallback. Regenerate
+the checked-in atlas with `python scripts/generate-node-font-atlas.py`; pass
+`--font` when Echo's UI font lives outside the standard Windows font directory.
 
 If no `gpuDevice` is supplied, the editor requests a high-performance WebGPU
 device. Applications with an existing GPU runtime should lend that device so

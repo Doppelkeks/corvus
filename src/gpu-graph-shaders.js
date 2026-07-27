@@ -386,7 +386,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
         0.0,
         1.0
     );
-    let threshold = 0.5 - smallTextWeight * 0.08;
+    let threshold = 0.4 - smallTextWeight * 0.08;
     let coverage = smoothstep(
         threshold - edgeWidth,
         threshold + edgeWidth,

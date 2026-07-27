@@ -15,8 +15,8 @@ export const GRAPH_SCENE_STRIDES = Object.freeze({
 
 export const GRAPH_SCENE_METRICS = Object.freeze({
     ...NODE_CARD_GEOMETRY,
-    glyphWidth: 7.5,
-    glyphHeight: 13,
+    glyphWidth: 8.4,
+    glyphHeight: 16,
     spatialCellSize: 256
 });
 
@@ -276,11 +276,11 @@ export function buildGraphScene(model, layout, options = {}) {
             );
             pushText(glyphs, port.id, {
                 x: port.direction === "input" ? 10 : box.width - 10,
-                y: port.y - 5,
+                y: port.y - 6,
                 nodeIndex,
                 color: TEXT.primary,
-                width: 6.4,
-                height: 10.5,
+                width: 7,
+                height: 12.5,
                 maximum: maximumCharacters,
                 align: port.direction === "output" ? "right" : "left"
             });

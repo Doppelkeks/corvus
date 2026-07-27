@@ -5,11 +5,15 @@ const ROWS = 6;
 const GLYPH_WIDTH = 5;
 const GLYPH_HEIGHT = 7;
 const GLYPH_SCALE = 8;
-const SIGNED_DISTANCE_RANGE = 8;
-const CELL_PADDING = SIGNED_DISTANCE_RANGE + 1;
+const SIGNED_DISTANCE_RANGE = 10;
+const CELL_PADDING = 12;
 const CELL_WIDTH = GLYPH_WIDTH * GLYPH_SCALE + CELL_PADDING * 2;
 const CELL_HEIGHT = GLYPH_HEIGHT * GLYPH_SCALE + CELL_PADDING * 2;
 const DIAGONAL_DISTANCE = Math.SQRT2;
+const UI_FONT_ATLAS_URL = new URL(
+    "./assets/echo-ui-semibold-sdf.png",
+    import.meta.url
+);
 let cachedAtlasData = null;
 
 export const GPU_FONT_ATLAS_METRICS = Object.freeze({
@@ -20,7 +24,9 @@ export const GPU_FONT_ATLAS_METRICS = Object.freeze({
     glyphScale: GLYPH_SCALE,
     distanceRange: SIGNED_DISTANCE_RANGE,
     cellWidth: CELL_WIDTH,
-    cellHeight: CELL_HEIGHT
+    cellHeight: CELL_HEIGHT,
+    family: "Segoe UI Variable Text, Segoe UI, Inter, sans-serif",
+    weight: 600
 });
 
 function distanceToSegment(pointX, pointY, start, end) {
@@ -194,14 +200,40 @@ export function createGpuFontAtlasData() {
     return cachedAtlasData;
 }
 
-export function createGpuFontAtlas(device) {
-    const { width, height, pixels } = createGpuFontAtlasData();
+function createTexture(device, width, height) {
     const texture = device.createTexture({
-        label: "Node editor signed-distance font atlas",
+        label: "Node editor Echo UI signed-distance font atlas",
         size: [width, height],
         format: "rgba8unorm",
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+        usage: GPUTextureUsage.TEXTURE_BINDING
+            | GPUTextureUsage.COPY_DST
+            | GPUTextureUsage.RENDER_ATTACHMENT
     });
+    return texture;
+}
+
+async function uploadUiFontAtlas(device) {
+    const response = await fetch(UI_FONT_ATLAS_URL);
+    if (!response.ok) {
+        throw new Error(`UI font atlas failed with ${response.status}`);
+    }
+    const bitmap = await createImageBitmap(await response.blob(), {
+        colorSpaceConversion: "none",
+        premultiplyAlpha: "none"
+    });
+    const texture = createTexture(device, bitmap.width, bitmap.height);
+    device.queue.copyExternalImageToTexture(
+        { source: bitmap },
+        { texture },
+        [bitmap.width, bitmap.height]
+    );
+    bitmap.close();
+    return texture;
+}
+
+function uploadFallbackAtlas(device) {
+    const { width, height, pixels } = createGpuFontAtlasData();
+    const texture = createTexture(device, width, height);
     device.queue.writeTexture(
         { texture },
         pixels,
@@ -211,6 +243,16 @@ export function createGpuFontAtlas(device) {
         },
         [width, height]
     );
+    return texture;
+}
+
+export async function createGpuFontAtlas(device) {
+    let texture;
+    try {
+        texture = await uploadUiFontAtlas(device);
+    } catch {
+        texture = uploadFallbackAtlas(device);
+    }
     return {
         texture,
         view: texture.createView(),

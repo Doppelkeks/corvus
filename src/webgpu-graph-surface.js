@@ -112,7 +112,7 @@ export class WebGpuGraphSurface {
             addressModeU: "clamp-to-edge",
             addressModeV: "clamp-to-edge"
         });
-        this.fontAtlas = createGpuFontAtlas(device);
+        this.fontAtlas = await createGpuFontAtlas(device);
         device.pushErrorScope("validation");
         this.#createPipelines();
         const pipelineError = await device.popErrorScope();
