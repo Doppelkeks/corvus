@@ -5,6 +5,7 @@ import {
 } from "./edge-geometry.js";
 import { DEFAULT_LAYOUT, layoutNodeEditorModel } from "./layout.js";
 import { normalizeNodeEditorModel } from "./model.js";
+import { socketOffsetInNode } from "./port-geometry.js";
 import { WebGpuEdgeLayer } from "./webgpu-edge-layer.js";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -33,6 +34,10 @@ function positionObject(positions) {
         id,
         { x: value.x, y: value.y }
     ]));
+}
+
+function portKey(nodeId, port, direction) {
+    return `${nodeId}\u0000${port}\u0000${direction}`;
 }
 
 function portRow(node, port, direction, callbacks) {
@@ -87,6 +92,7 @@ export class NodeEditor {
         this.edgeGeometry = [];
         this.nodeById = new Map();
         this.previewById = new Map();
+        this.portOffsets = new Map();
         this.selectedNodeId = null;
         this.selectedEdgeId = null;
         this.hoveredEdgeId = null;
@@ -249,6 +255,7 @@ export class NodeEditor {
         };
         this.#renderNodes();
         this.#sizeScene();
+        this.#measurePortOffsets();
         this.#calculateEdges();
         this.#syncSelection();
         this.#applyView();
@@ -466,6 +473,15 @@ export class NodeEditor {
     }
 
     #portAnchor(box, node, portId, direction) {
+        const offset = this.portOffsets.get(
+            portKey(node.id, portId, direction)
+        );
+        if (offset) {
+            return {
+                x: box.x + offset.x,
+                y: box.y + offset.y
+            };
+        }
         const ports = direction === "output" ? node.outputs : node.inputs;
         const index = Math.max(0, ports.findIndex((port) => port.id === portId));
         const headerHeight = Number.isFinite(this.layoutOptions.headerHeight)
@@ -481,6 +497,37 @@ export class NodeEditor {
             y: box.y + headerHeight + previewHeight
                 + (index + 0.5) * 20
         };
+    }
+
+    #measurePortOffsets() {
+        const sceneRect = this.scene.getBoundingClientRect();
+        const sceneSize = {
+            width: this.sceneWidth,
+            height: this.sceneHeight
+        };
+        const measured = new Map();
+        this.nodeLayer.querySelectorAll(".node-editor-socket").forEach(
+            (socket) => {
+                const box = this.layoutById.get(socket.dataset.nodeId);
+                if (!box) return;
+                const offset = socketOffsetInNode(
+                    socket.getBoundingClientRect(),
+                    sceneRect,
+                    sceneSize,
+                    box
+                );
+                if (!offset) return;
+                measured.set(
+                    portKey(
+                        socket.dataset.nodeId,
+                        socket.dataset.port,
+                        socket.dataset.direction
+                    ),
+                    offset
+                );
+            }
+        );
+        if (measured.size > 0) this.portOffsets = measured;
     }
 
     #calculateEdges() {
@@ -769,6 +816,7 @@ export class NodeEditor {
         this.#calculateLayout();
         this.#renderNodes();
         this.#sizeScene();
+        this.#measurePortOffsets();
         this.#calculateEdges();
         this.#syncSelection();
         this.callbacks.onPositionsChange?.(this.getPositions());

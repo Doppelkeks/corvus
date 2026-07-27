@@ -6,6 +6,7 @@ export {
     DEFAULT_LAYOUT,
     layoutNodeEditorModel
 } from "./layout.js";
+export { socketOffsetInNode } from "./port-geometry.js";
 export {
     cubicControls,
     distanceToSegment,

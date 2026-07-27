@@ -110,6 +110,8 @@ keys, resized with Shift + arrow keys, and reset with `reset()`.
 
 ## Headless utilities
 
-`normalizeNodeEditorModel`, `layoutNodeEditorModel`, `sampleCubicEdge`, and
-`hitTestEdges` are independent of the DOM and WebGPU. They are covered by the
-package's unit tests and can be reused by alternate host adapters.
+`normalizeNodeEditorModel`, `layoutNodeEditorModel`, `socketOffsetInNode`,
+`sampleCubicEdge`, and `hitTestEdges` are independent of the DOM and WebGPU.
+They are covered by the package's unit tests and can be reused by alternate
+host adapters. Visual wires use measured socket centers cached in unscaled
+graph coordinates, so card styling and zoom never introduce endpoint drift.
