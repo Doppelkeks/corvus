@@ -83,4 +83,24 @@ describe("layoutNodeEditorModel", () => {
             plainA.height + 96
         );
     });
+
+    it("lays out deep graphs iteratively without overflowing the stack", () => {
+        const count = 10_000;
+        const nodes = Array.from({ length: count }, (_, index) => ({
+            id: `node-${index}`,
+            inputs: index === 0 ? [] : [{ id: "in" }],
+            outputs: index === count - 1 ? [] : [{ id: "out" }]
+        }));
+        const edges = Array.from({ length: count - 1 }, (_, index) => ({
+            from: { nodeId: `node-${index}`, port: "out" },
+            to: { nodeId: `node-${index + 1}`, port: "in" }
+        }));
+        const layout = layoutNodeEditorModel(normalizeNodeEditorModel({
+            id: "deep-graph",
+            nodes,
+            edges
+        }));
+        expect(layout.nodes).toHaveLength(count);
+        expect(layout.nodes.at(-1).x).toBeGreaterThan(layout.nodes[0].x);
+    });
 });

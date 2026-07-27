@@ -1,14 +1,7 @@
-import {
-    cubicControls,
-    hitTestEdges,
-    sampleCubicEdge
-} from "./edge-geometry.js";
-import { DEFAULT_LAYOUT, layoutNodeEditorModel } from "./layout.js";
+import { hitTestEdges } from "./edge-geometry.js";
+import { GraphWorkerClient } from "./graph-worker-client.js";
 import { normalizeNodeEditorModel } from "./model.js";
-import { socketOffsetInNode } from "./port-geometry.js";
-import { WebGpuEdgeLayer } from "./webgpu-edge-layer.js";
-
-const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+import { WebGpuGraphSurface } from "./webgpu-graph-surface.js";
 
 function element(tag, className = "", text = null) {
     const node = document.createElement(tag);
@@ -36,39 +29,18 @@ function positionObject(positions) {
     ]));
 }
 
-function portKey(nodeId, port, direction) {
-    return `${nodeId}\u0000${port}\u0000${direction}`;
+function spatialCell(scene, point) {
+    const cellSize = scene.spatialIndex.cellSize;
+    return scene.spatialIndex.cells[
+        `${Math.floor(point.x / cellSize)}:${Math.floor(point.y / cellSize)}`
+    ];
 }
 
-function portRow(node, port, direction, callbacks) {
-    const row = element("li", `node-editor-port ${direction}`);
-    const socket = element("button", `node-editor-socket type-${port.type}`);
-    socket.type = "button";
-    socket.dataset.nodeId = node.id;
-    socket.dataset.port = port.id;
-    socket.dataset.direction = direction;
-    socket.title = `${direction === "input" ? "Connect to" : "Connect from"} ${node.label}.${port.label}`;
-    if (
-        callbacks.selectedPort?.nodeId === node.id
-        && callbacks.selectedPort?.port === port.id
-        && callbacks.selectedPort?.direction === direction
-    ) {
-        socket.classList.add("selected");
-    }
-    socket.addEventListener("click", (event) => {
-        event.stopPropagation();
-        callbacks.onSelectPort?.({
-            nodeId: node.id,
-            port: port.id,
-            direction,
-            type: port.type
-        });
-    });
-    const label = element("span", "node-editor-port-label", port.label);
-    const type = element("small", "", port.type);
-    if (direction === "input") row.append(socket, label, type);
-    else row.append(type, label, socket);
-    return row;
+function portDistance(point, node, port) {
+    return Math.hypot(
+        point.x - (node.x + port.x),
+        point.y - (node.y + port.y)
+    );
 }
 
 export class NodeEditor {
@@ -76,7 +48,8 @@ export class NodeEditor {
         gpuDevice = null,
         layout = {},
         onError = null,
-        onRendererChange = null
+        onRendererChange = null,
+        workerFactory = undefined
     } = {}) {
         if (!(container instanceof Element)) {
             throw new TypeError("NodeEditor requires a container");
@@ -88,119 +61,92 @@ export class NodeEditor {
         this.model = null;
         this.positions = new Map();
         this.layout = null;
-        this.layoutById = new Map();
-        this.edgeGeometry = [];
-        this.nodeById = new Map();
-        this.previewById = new Map();
-        this.portOffsets = new Map();
+        this.scene = null;
+        this.previewStates = new Map();
         this.selectedNodeId = null;
         this.selectedEdgeId = null;
         this.hoveredEdgeId = null;
         this.selectedPort = null;
         this.view = { zoom: 1, scrollLeft: 0, scrollTop: 0 };
-        this.scrollFrame = 0;
-        this.edgeFrame = 0;
+        this.prepareRevision = 0;
+        this.drag = null;
+        this.destroyed = false;
         this.cleanup = [];
 
-        container.classList.add("node-editor");
+        container.classList.add("node-editor", "node-editor-gpu-only");
         this.viewport = element("div", "node-editor-viewport");
         this.viewport.tabIndex = 0;
         this.viewport.setAttribute("role", "application");
-        this.viewport.setAttribute("aria-label", "Node graph editor");
-        this.canvas = element("div", "node-editor-canvas");
-        this.scene = element("div", "node-editor-scene");
-        this.wireCanvas = document.createElement("canvas");
-        this.wireCanvas.className = "node-editor-wire-surface";
-        this.edgeHitLayer = document.createElementNS(SVG_NAMESPACE, "svg");
-        this.edgeHitLayer.classList.add("node-editor-edge-hit-layer");
-        this.nodeLayer = element("div", "node-editor-node-layer");
-        this.edgeControls = element("div", "node-editor-a11y-edges");
+        this.viewport.setAttribute(
+            "aria-label",
+            "WebGPU node graph editor. Drag node headers to move. Alt-drag or middle-drag to pan."
+        );
+        this.canvas = document.createElement("canvas");
+        this.canvas.className = "node-editor-gpu-surface";
         this.selectionStatus = element(
             "div",
             "node-editor-selection-status",
             "WebGPU graph surface"
         );
         this.selectionStatus.setAttribute("aria-live", "polite");
-        this.scene.append(
-            this.wireCanvas,
-            this.edgeHitLayer,
-            this.edgeControls,
-            this.nodeLayer
-        );
-        this.canvas.append(this.scene);
         this.viewport.append(this.canvas, this.selectionStatus);
         container.replaceChildren(this.viewport);
 
-        this.edgeLayer = new WebGpuEdgeLayer(this.wireCanvas, {
+        this.worker = new GraphWorkerClient(
+            workerFactory ? { workerFactory } : undefined
+        );
+        this.surface = new WebGpuGraphSurface(this.canvas, {
             device: gpuDevice,
             onStatus: onRendererChange
         });
-        this.ready = this.edgeLayer.initialize(gpuDevice).catch((error) => {
+        this.ready = this.surface.initialize(gpuDevice).catch((error) => {
             container.classList.add("gpu-unavailable");
-            this.selectionStatus.textContent = "WebGPU graph renderer unavailable";
+            this.selectionStatus.textContent =
+                "WebGPU graph renderer unavailable";
             this.onError?.(error);
             throw error;
         });
-        // Callers may treat ready as optional. Avoid an unhandled rejection
-        // while still preserving the rejecting promise for explicit awaits.
         this.ready.catch(() => {});
         this.#bindEvents();
     }
 
     #bindEvents() {
-        const onScroll = () => {
-            cancelAnimationFrame(this.scrollFrame);
-            this.scrollFrame = requestAnimationFrame(() => {
-                this.view = {
-                    ...this.view,
-                    scrollLeft: this.viewport.scrollLeft,
-                    scrollTop: this.viewport.scrollTop
-                };
-                this.callbacks.onViewChange?.(this.getView());
-            });
-        };
-        const onWheel = (event) => {
-            if (!event.ctrlKey && !event.metaKey) return;
-            event.preventDefault();
-            const rect = this.viewport.getBoundingClientRect();
-            const point = {
-                x: event.clientX - rect.left,
-                y: event.clientY - rect.top
-            };
-            const graphPoint = {
-                x: (this.viewport.scrollLeft + point.x) / this.view.zoom,
-                y: (this.viewport.scrollTop + point.y) / this.view.zoom
-            };
-            const zoom = clampZoom(
-                this.view.zoom + (event.deltaY < 0 ? 0.1 : -0.1)
-            );
-            this.setView({
-                zoom,
-                scrollLeft: graphPoint.x * zoom - point.x,
-                scrollTop: graphPoint.y * zoom - point.y
-            });
-        };
-        const onPointerDown = (event) => this.#handleBackgroundPointerDown(event);
-        const onPointerMove = (event) => this.#handleBackgroundPointerMove(event);
+        const onWheel = (event) => this.#handleWheel(event);
+        const onPointerDown = (event) => this.#handlePointerDown(event);
+        const onPointerMove = (event) => this.#handlePointerMove(event);
+        const onPointerUp = (event) => this.#handlePointerUp(event);
         const onPointerLeave = () => {
-            if (this.hoveredEdgeId) {
-                this.hoveredEdgeId = null;
-                this.#scheduleEdges();
-            }
+            if (this.drag || !this.hoveredEdgeId) return;
+            this.hoveredEdgeId = null;
+            this.#syncInteraction();
         };
         const onKeyDown = (event) => this.#handleKeyDown(event);
-        this.viewport.addEventListener("scroll", onScroll);
         this.viewport.addEventListener("wheel", onWheel, { passive: false });
         this.viewport.addEventListener("pointerdown", onPointerDown);
         this.viewport.addEventListener("pointermove", onPointerMove);
+        this.viewport.addEventListener("pointerup", onPointerUp);
+        this.viewport.addEventListener("pointercancel", onPointerUp);
         this.viewport.addEventListener("pointerleave", onPointerLeave);
         this.viewport.addEventListener("keydown", onKeyDown);
         this.cleanup.push(
-            () => this.viewport.removeEventListener("scroll", onScroll),
             () => this.viewport.removeEventListener("wheel", onWheel),
-            () => this.viewport.removeEventListener("pointerdown", onPointerDown),
-            () => this.viewport.removeEventListener("pointermove", onPointerMove),
-            () => this.viewport.removeEventListener("pointerleave", onPointerLeave),
+            () => this.viewport.removeEventListener(
+                "pointerdown",
+                onPointerDown
+            ),
+            () => this.viewport.removeEventListener(
+                "pointermove",
+                onPointerMove
+            ),
+            () => this.viewport.removeEventListener("pointerup", onPointerUp),
+            () => this.viewport.removeEventListener(
+                "pointercancel",
+                onPointerUp
+            ),
+            () => this.viewport.removeEventListener(
+                "pointerleave",
+                onPointerLeave
+            ),
             () => this.viewport.removeEventListener("keydown", onKeyDown)
         );
     }
@@ -219,14 +165,14 @@ export class NodeEditor {
             this.positions.clear();
             this.selectedNodeId = null;
             this.selectedEdgeId = null;
+            this.selectedPort = null;
+            this.previewStates.clear();
         }
         this.model = normalized;
         this.callbacks = callbacks;
         this.selectedNodeId = selectedNodeId;
         this.selectedEdgeId = selectedEdgeId;
         this.selectedPort = selectedPort;
-        this.nodeById = new Map(normalized.nodes.map((node) => [node.id, node]));
-
         const liveIds = new Set(normalized.nodes.map((node) => node.id));
         for (const id of [...this.positions.keys()]) {
             if (!liveIds.has(id)) this.positions.delete(id);
@@ -234,513 +180,290 @@ export class NodeEditor {
         if (positions) {
             Object.entries(positions).forEach(([id, position]) => {
                 if (liveIds.has(id) && finitePosition(position)) {
-                    this.positions.set(id, { x: position.x, y: position.y });
+                    this.positions.set(id, {
+                        x: position.x,
+                        y: position.y
+                    });
                 }
             });
         }
-        const firstLayout = layoutNodeEditorModel(normalized, {
-            ...this.layoutOptions,
-            positions: positionObject(this.positions)
-        });
-        firstLayout.nodes.forEach((entry) => {
-            if (!this.positions.has(entry.nodeId)) {
-                this.positions.set(entry.nodeId, { x: entry.x, y: entry.y });
-            }
-        });
-        this.#calculateLayout();
-        if (viewState) this.view = {
-            zoom: clampZoom(Number(viewState.zoom) || 1),
-            scrollLeft: Math.max(0, Number(viewState.scrollLeft) || 0),
-            scrollTop: Math.max(0, Number(viewState.scrollTop) || 0)
-        };
-        this.#renderNodes();
-        this.#sizeScene();
-        this.#measurePortOffsets();
-        this.#calculateEdges();
-        this.#syncSelection();
-        this.#applyView();
+        if (viewState) {
+            this.view = {
+                zoom: clampZoom(Number(viewState.zoom) || 1),
+                scrollLeft: Math.max(
+                    0,
+                    Number(viewState.scrollLeft) || 0
+                ),
+                scrollTop: Math.max(0, Number(viewState.scrollTop) || 0)
+            };
+        }
+        this.surface.setView(this.view);
+        this.#syncInteraction();
+        this.prepared = this.#prepareScene();
         return this.stats();
     }
 
-    #calculateLayout() {
-        this.layout = layoutNodeEditorModel(this.model, {
-            ...this.layoutOptions,
-            positions: positionObject(this.positions)
+    async #prepareScene({ notifyPositions = false } = {}) {
+        const revision = ++this.prepareRevision;
+        const result = await this.worker.prepare({
+            model: this.model,
+            positions: positionObject(this.positions),
+            layoutOptions: this.layoutOptions,
+            sceneOptions: this.layoutOptions
         });
-        this.layoutById = new Map(this.layout.nodes.map((entry) => [
-            entry.nodeId,
-            { ...entry }
-        ]));
-    }
-
-    #sizeScene() {
-        const minimumWidth = Math.max(
-            1,
-            this.viewport.clientWidth / this.view.zoom
-        );
-        const minimumHeight = Math.max(
-            1,
-            this.viewport.clientHeight / this.view.zoom
-        );
-        this.sceneWidth = Math.max(this.layout.width + 180, minimumWidth);
-        this.sceneHeight = Math.max(this.layout.height + 180, minimumHeight);
-        Object.assign(this.scene.style, {
-            width: `${this.sceneWidth}px`,
-            height: `${this.sceneHeight}px`
-        });
-        Object.assign(this.nodeLayer.style, {
-            width: `${this.sceneWidth}px`,
-            height: `${this.sceneHeight}px`
-        });
-        Object.assign(this.wireCanvas.style, {
-            width: `${this.sceneWidth}px`,
-            height: `${this.sceneHeight}px`
-        });
-        this.edgeHitLayer.setAttribute(
-            "viewBox",
-            `0 0 ${this.sceneWidth} ${this.sceneHeight}`
-        );
-        this.edgeHitLayer.setAttribute("width", String(this.sceneWidth));
-        this.edgeHitLayer.setAttribute("height", String(this.sceneHeight));
-        this.#applyView();
-    }
-
-    #applyView() {
-        this.scene.style.transform = `scale(${this.view.zoom})`;
-        this.canvas.style.width = `${this.sceneWidth * this.view.zoom}px`;
-        this.canvas.style.height = `${this.sceneHeight * this.view.zoom}px`;
-        this.viewport.scrollLeft = this.view.scrollLeft;
-        this.viewport.scrollTop = this.view.scrollTop;
-    }
-
-    #renderNodes() {
-        const fragment = document.createDocumentFragment();
-        const previewById = new Map();
-        for (const node of this.model.nodes) {
-            const box = this.layoutById.get(node.id);
-            const card = element(
-                "article",
-                `node-editor-node category-${node.category}`
-            );
-            card.dataset.nodeId = node.id;
-            card.style.transform = `translate(${box.x}px, ${box.y}px)`;
-            card.style.width = `${box.width}px`;
-            card.style.minHeight = `${box.height}px`;
-            card.tabIndex = 0;
-            card.setAttribute("aria-label", `${node.label} node`);
-            card.addEventListener("click", () => this.selectNode(node.id));
-            card.addEventListener("keydown", (event) => {
-                if (!["Enter", " "].includes(event.key)) return;
-                event.preventDefault();
-                this.selectNode(node.id);
-            });
-
-            const header = element("header", "node-editor-node-header");
-            header.dataset.nodeDragHandle = "";
-            const title = element("div", "node-editor-node-title");
-            title.append(
-                element("strong", "", node.label),
-                element("small", "", node.type)
-            );
-            header.append(
-                element("span", "node-editor-node-index", String(node.order + 1)),
-                title,
-                element("span", "node-editor-node-category", node.category)
-            );
-            header.title = "Drag to move node";
-            this.#bindNodeDrag(header, card, node, box);
-            card.append(header);
-
-            if (node.preview) {
-                const preview = element("figure", "node-editor-node-preview");
-                preview.dataset.previewState = "loading";
-                const canvas = document.createElement("canvas");
-                canvas.className = "node-editor-node-preview-canvas";
-                canvas.dataset.nodePreview = node.id;
-                canvas.width = 384;
-                canvas.height = Math.max(
-                    1,
-                    Math.round(canvas.width / node.preview.aspectRatio)
-                );
-                canvas.setAttribute(
-                    "aria-label",
-                    `${node.label}: ${node.preview.label}`
-                );
-                const state = element(
-                    "figcaption",
-                    "node-editor-node-preview-state",
-                    "Waiting for GPU"
-                );
-                preview.append(canvas, state);
-                card.append(preview);
-                previewById.set(node.id, {
-                    node,
-                    element: preview,
-                    canvas,
-                    state
+        await this.ready;
+        if (revision !== this.prepareRevision || this.destroyed) return null;
+        this.layout = result.layout;
+        this.scene = result.scene;
+        result.layout.nodes.forEach((entry) => {
+            if (!this.positions.has(entry.nodeId)) {
+                this.positions.set(entry.nodeId, {
+                    x: entry.x,
+                    y: entry.y
                 });
             }
-
-            const ports = element("div", "node-editor-ports");
-            const inputs = element("ul", "node-editor-inputs");
-            node.inputs.forEach((port) =>
-                inputs.append(portRow(node, port, "input", {
-                    selectedPort: this.selectedPort,
-                    onSelectPort: this.callbacks.onSelectPort
-                })));
-            const outputs = element("ul", "node-editor-outputs");
-            node.outputs.forEach((port) => {
-                const row = portRow(node, port, "output", {
-                    selectedPort: this.selectedPort,
-                    onSelectPort: this.callbacks.onSelectPort
-                });
-                if (port.graphOutput) row.classList.add("graph-output");
-                outputs.append(row);
-            });
-            ports.append(inputs, outputs);
-            card.append(ports);
-
-            if (node.summary.length > 0) {
-                const summary = element("dl", "node-editor-node-summary");
-                node.summary.slice(0, 3).forEach((item) => {
-                    const entry = element("div");
-                    entry.append(
-                        element("dt", "", item.label),
-                        element("dd", "", item.value)
-                    );
-                    summary.append(entry);
-                });
-                if (node.summary.length > 3) {
-                    summary.append(element(
-                        "p",
-                        "",
-                        `+${node.summary.length - 3} parameters`
-                    ));
-                }
-                card.append(summary);
-            }
-            fragment.append(card);
+        });
+        this.surface.setScene(result.scene);
+        this.surface.setView(this.view);
+        this.surface.setPreviewTextures(this.previewStates);
+        this.selectionStatus.textContent =
+            `${this.model.nodes.length} nodes · ${this.model.edges.length} connections · WebGPU compute`;
+        this.#syncInteraction();
+        if (notifyPositions) {
+            this.callbacks.onPositionsChange?.(this.getPositions());
         }
-        this.nodeLayer.replaceChildren(fragment);
-        this.previewById = previewById;
-    }
-
-    #bindNodeDrag(header, card, node, box) {
-        header.addEventListener("pointerdown", (event) => {
-            if (event.button !== 0) return;
-            event.preventDefault();
-            event.stopPropagation();
-            this.selectNode(node.id);
-            const origin = { x: box.x, y: box.y };
-            const pointer = { x: event.clientX, y: event.clientY };
-            header.setPointerCapture(event.pointerId);
-            card.classList.add("dragging");
-            const move = (moveEvent) => {
-                box.x = Math.max(
-                    12,
-                    origin.x + (moveEvent.clientX - pointer.x) / this.view.zoom
-                );
-                box.y = Math.max(
-                    12,
-                    origin.y + (moveEvent.clientY - pointer.y) / this.view.zoom
-                );
-                this.positions.set(node.id, { x: box.x, y: box.y });
-                card.style.transform = `translate(${box.x}px, ${box.y}px)`;
-                this.layout = {
-                    ...this.layout,
-                    width: Math.max(this.layout.width, box.x + box.width + 36),
-                    height: Math.max(this.layout.height, box.y + box.height + 36)
-                };
-                this.#sizeScene();
-                this.#calculateEdges();
-            };
-            const finish = (upEvent) => {
-                if (header.hasPointerCapture(upEvent.pointerId)) {
-                    header.releasePointerCapture(upEvent.pointerId);
-                }
-                header.removeEventListener("pointermove", move);
-                header.removeEventListener("pointerup", finish);
-                header.removeEventListener("pointercancel", finish);
-                card.classList.remove("dragging");
-                const position = { x: box.x, y: box.y };
-                this.callbacks.onMoveNode?.(node.id, position);
-                this.callbacks.onPositionsChange?.(this.getPositions());
-            };
-            header.addEventListener("pointermove", move);
-            header.addEventListener("pointerup", finish);
-            header.addEventListener("pointercancel", finish);
-        });
-    }
-
-    #portAnchor(box, node, portId, direction) {
-        const offset = this.portOffsets.get(
-            portKey(node.id, portId, direction)
-        );
-        if (offset) {
-            return {
-                x: box.x + offset.x,
-                y: box.y + offset.y
-            };
-        }
-        const ports = direction === "output" ? node.outputs : node.inputs;
-        const index = Math.max(0, ports.findIndex((port) => port.id === portId));
-        const headerHeight = Number.isFinite(this.layoutOptions.headerHeight)
-            ? this.layoutOptions.headerHeight
-            : DEFAULT_LAYOUT.headerHeight;
-        const previewHeight = node.preview
-            ? (Number.isFinite(this.layoutOptions.previewHeight)
-                ? this.layoutOptions.previewHeight
-                : DEFAULT_LAYOUT.previewHeight)
-            : 0;
-        return {
-            x: direction === "output" ? box.x + box.width : box.x,
-            y: box.y + headerHeight + previewHeight
-                + (index + 0.5) * 20
-        };
-    }
-
-    #measurePortOffsets() {
-        const sceneRect = this.scene.getBoundingClientRect();
-        const sceneSize = {
-            width: this.sceneWidth,
-            height: this.sceneHeight
-        };
-        const measured = new Map();
-        this.nodeLayer.querySelectorAll(".node-editor-socket").forEach(
-            (socket) => {
-                const box = this.layoutById.get(socket.dataset.nodeId);
-                if (!box) return;
-                const offset = socketOffsetInNode(
-                    socket.getBoundingClientRect(),
-                    sceneRect,
-                    sceneSize,
-                    box
-                );
-                if (!offset) return;
-                measured.set(
-                    portKey(
-                        socket.dataset.nodeId,
-                        socket.dataset.port,
-                        socket.dataset.direction
-                    ),
-                    offset
-                );
-            }
-        );
-        if (measured.size > 0) this.portOffsets = measured;
-    }
-
-    #calculateEdges() {
-        this.edgeGeometry = this.model.edges.map((edge) => {
-            const source = this.layoutById.get(edge.from.nodeId);
-            const target = this.layoutById.get(edge.to.nodeId);
-            const sourceNode = this.nodeById.get(edge.from.nodeId);
-            const targetNode = this.nodeById.get(edge.to.nodeId);
-            const from = this.#portAnchor(
-                source,
-                sourceNode,
-                edge.from.port,
-                "output"
-            );
-            const to = this.#portAnchor(
-                target,
-                targetNode,
-                edge.to.port,
-                "input"
-            );
-            return Object.freeze({
-                ...edge,
-                fromAnchor: Object.freeze(from),
-                toAnchor: Object.freeze(to),
-                points: sampleCubicEdge(from, to)
-            });
-        });
-        this.#renderEdgeHitTargets();
-        this.#renderAccessibleEdges();
-        this.#scheduleEdges();
-    }
-
-    #renderEdgeHitTargets() {
-        const fragment = document.createDocumentFragment();
-        this.edgeGeometry.forEach((edge) => {
-            const controls = cubicControls(edge.fromAnchor, edge.toAnchor);
-            const path = document.createElementNS(SVG_NAMESPACE, "path");
-            path.setAttribute("class", "node-editor-edge-hit");
-            path.setAttribute("role", "button");
-            path.setAttribute("stroke", "#ffffff");
-            path.setAttribute("stroke-opacity", "0.01");
-            path.setAttribute("fill", "none");
-            path.setAttribute("pointer-events", "stroke");
-            path.setAttribute(
-                "d",
-                `M ${edge.fromAnchor.x} ${edge.fromAnchor.y} `
-                + `C ${controls.first.x} ${controls.first.y}, `
-                + `${controls.second.x} ${controls.second.y}, `
-                + `${edge.toAnchor.x} ${edge.toAnchor.y}`
-            );
-            path.setAttribute("tabindex", "0");
-            const source = this.nodeById.get(edge.from.nodeId);
-            const target = this.nodeById.get(edge.to.nodeId);
-            path.setAttribute(
-                "aria-label",
-                `${source.label}.${edge.from.port} to ${target.label}.${edge.to.port}`
-            );
-            path.addEventListener("pointerdown", (event) => {
-                if (event.button !== 0) return;
-                event.preventDefault();
-                event.stopPropagation();
-                this.selectEdge(edge.id);
-            });
-            path.addEventListener("pointerenter", () => {
-                this.hoveredEdgeId = edge.id;
-                this.#scheduleEdges();
-            });
-            path.addEventListener("pointerleave", () => {
-                if (this.hoveredEdgeId === edge.id) {
-                    this.hoveredEdgeId = null;
-                    this.#scheduleEdges();
-                }
-            });
-            path.addEventListener("keydown", (event) => {
-                if (!["Enter", " "].includes(event.key)) return;
-                event.preventDefault();
-                this.selectEdge(edge.id);
-            });
-            fragment.append(path);
-        });
-        this.edgeHitLayer.replaceChildren(fragment);
-    }
-
-    #scheduleEdges() {
-        cancelAnimationFrame(this.edgeFrame);
-        this.edgeFrame = requestAnimationFrame(() => this.edgeLayer.setEdges(
-            this.edgeGeometry,
-            {
-                selectedEdgeId: this.selectedEdgeId,
-                hoveredEdgeId: this.hoveredEdgeId,
-                width: this.sceneWidth,
-                height: this.sceneHeight
-            }
-        ));
-    }
-
-    #renderAccessibleEdges() {
-        const fragment = document.createDocumentFragment();
-        this.edgeGeometry.forEach((edge) => {
-            const source = this.nodeById.get(edge.from.nodeId);
-            const target = this.nodeById.get(edge.to.nodeId);
-            const button = element(
-                "button",
-                "node-editor-edge-target",
-                `${source.label}.${edge.from.port} to ${target.label}.${edge.to.port}`
-            );
-            button.type = "button";
-            button.title = `${source.label}.${edge.from.port} → ${target.label}.${edge.to.port}`;
-            const midpoint = edge.points[Math.floor(edge.points.length / 2)];
-            button.style.transform =
-                `translate(${midpoint.x - 8}px, ${midpoint.y - 8}px)`;
-            button.addEventListener("click", () => this.selectEdge(edge.id));
-            button.addEventListener("pointerenter", () => {
-                this.hoveredEdgeId = edge.id;
-                this.#scheduleEdges();
-            });
-            button.addEventListener("pointerleave", () => {
-                if (this.hoveredEdgeId === edge.id) {
-                    this.hoveredEdgeId = null;
-                    this.#scheduleEdges();
-                }
-            });
-            fragment.append(button);
-        });
-        this.edgeControls.replaceChildren(fragment);
+        return result;
     }
 
     #graphPoint(event) {
-        const rect = this.scene.getBoundingClientRect();
+        const rect = this.canvas.getBoundingClientRect();
         return {
-            x: (event.clientX - rect.left) / this.view.zoom,
-            y: (event.clientY - rect.top) / this.view.zoom
+            x: (
+                this.view.scrollLeft
+                + event.clientX
+                - rect.left
+            ) / this.view.zoom,
+            y: (
+                this.view.scrollTop
+                + event.clientY
+                - rect.top
+            ) / this.view.zoom
         };
     }
 
-    #backgroundTarget(target) {
-        return [
-            this.viewport,
-            this.canvas,
-            this.scene,
-            this.wireCanvas,
-            this.edgeHitLayer,
-            this.nodeLayer
-        ].includes(target);
+    #liveNode(index) {
+        const metadata = this.scene.hitNodes[index];
+        const offset = index * 4;
+        return {
+            ...metadata,
+            x: this.scene.nodeRecords[offset],
+            y: this.scene.nodeRecords[offset + 1],
+            width: this.scene.nodeRecords[offset + 2],
+            height: this.scene.nodeRecords[offset + 3]
+        };
     }
 
-    #handleBackgroundPointerDown(event) {
-        if (!this.#backgroundTarget(event.target)) return;
-        this.viewport.focus({ preventScroll: true });
-        if (event.button === 1 || (event.button === 0 && event.altKey)) {
-            this.#beginPan(event);
+    #candidateNodeIndexes(point) {
+        const indexes = spatialCell(this.scene, point)?.nodes;
+        return indexes ?? [];
+    }
+
+    #nodeAt(point) {
+        if (!this.scene) return null;
+        const indexes = this.#candidateNodeIndexes(point);
+        for (let offset = indexes.length - 1; offset >= 0; offset -= 1) {
+            const node = this.#liveNode(indexes[offset]);
+            if (
+                point.x >= node.x
+                && point.x <= node.x + node.width
+                && point.y >= node.y
+                && point.y <= node.y + node.height
+            ) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    #portAt(point) {
+        if (!this.scene) return null;
+        const radius = 11 / this.view.zoom;
+        for (const index of this.#candidateNodeIndexes(point)) {
+            const node = this.#liveNode(index);
+            for (const port of node.ports) {
+                if (portDistance(point, node, port) <= radius) {
+                    return { node, port };
+                }
+            }
+        }
+        return null;
+    }
+
+    #edgeAt(point, tolerance = 9) {
+        if (!this.scene) return null;
+        const candidateIndexes = spatialCell(
+            this.scene,
+            point
+        )?.edges;
+        const candidates = (candidateIndexes ?? []).map(
+            (index) => this.scene.hitEdges[index]
+        );
+        return hitTestEdges(
+            candidates,
+            point,
+            tolerance / this.view.zoom
+        );
+    }
+
+    #handleWheel(event) {
+        event.preventDefault();
+        if (event.ctrlKey || event.metaKey) {
+            const rect = this.canvas.getBoundingClientRect();
+            const local = {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+            const graphPoint = {
+                x: (this.view.scrollLeft + local.x) / this.view.zoom,
+                y: (this.view.scrollTop + local.y) / this.view.zoom
+            };
+            const zoom = clampZoom(
+                this.view.zoom + (event.deltaY < 0 ? 0.1 : -0.1)
+            );
+            this.setView({
+                zoom,
+                scrollLeft: graphPoint.x * zoom - local.x,
+                scrollTop: graphPoint.y * zoom - local.y
+            });
             return;
         }
-        if (event.button !== 0) return;
-        const edge = hitTestEdges(
-            this.edgeGeometry,
-            this.#graphPoint(event),
-            9 / this.view.zoom
-        );
-        if (edge) {
-            event.preventDefault();
-            this.selectEdge(edge.id);
-        } else {
-            this.clearSelection();
-        }
+        this.setView({
+            ...this.view,
+            scrollLeft: this.view.scrollLeft + event.deltaX,
+            scrollTop: this.view.scrollTop + event.deltaY
+        });
     }
 
-    #handleBackgroundPointerMove(event) {
-        if (!this.#backgroundTarget(event.target)) return;
-        const edge = hitTestEdges(
-            this.edgeGeometry,
-            this.#graphPoint(event),
-            7 / this.view.zoom
+    #handlePointerDown(event) {
+        if (event.button !== 0 && event.button !== 1) return;
+        event.preventDefault();
+        this.viewport.focus({ preventScroll: true });
+        const pointerId = event.pointerId;
+        if (event.button === 1 || event.altKey) {
+            this.drag = {
+                kind: "pan",
+                pointerId,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                scrollLeft: this.view.scrollLeft,
+                scrollTop: this.view.scrollTop
+            };
+            this.viewport.classList.add("panning");
+            this.viewport.setPointerCapture(pointerId);
+            return;
+        }
+        const point = this.#graphPoint(event);
+        const portHit = this.#portAt(point);
+        if (portHit) {
+            this.selectedPort = {
+                nodeId: portHit.node.id,
+                port: portHit.port.id,
+                direction: portHit.port.direction,
+                type: portHit.port.type
+            };
+            this.selectedNodeId = portHit.node.id;
+            this.selectedEdgeId = null;
+            this.#syncInteraction();
+            this.callbacks.onSelectPort?.({ ...this.selectedPort });
+            return;
+        }
+        const node = this.#nodeAt(point);
+        if (node) {
+            this.selectNode(node.id);
+            if (point.y - node.y <= node.headerHeight) {
+                this.drag = {
+                    kind: "node",
+                    pointerId,
+                    nodeId: node.id,
+                    nodeIndex: node.index,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                    x: node.x,
+                    y: node.y
+                };
+                this.viewport.classList.add("dragging-node");
+                this.viewport.setPointerCapture(pointerId);
+            }
+            return;
+        }
+        const edge = this.#edgeAt(point);
+        if (edge) {
+            this.selectEdge(edge.id);
+            return;
+        }
+        this.clearSelection();
+    }
+
+    #handlePointerMove(event) {
+        if (this.drag?.pointerId === event.pointerId) {
+            if (this.drag.kind === "pan") {
+                this.setView({
+                    ...this.view,
+                    scrollLeft: this.drag.scrollLeft
+                        - (event.clientX - this.drag.clientX),
+                    scrollTop: this.drag.scrollTop
+                        - (event.clientY - this.drag.clientY)
+                });
+                return;
+            }
+            const position = {
+                x: Math.max(
+                    12,
+                    this.drag.x
+                        + (event.clientX - this.drag.clientX) / this.view.zoom
+                ),
+                y: Math.max(
+                    12,
+                    this.drag.y
+                        + (event.clientY - this.drag.clientY) / this.view.zoom
+                )
+            };
+            this.positions.set(this.drag.nodeId, position);
+            this.surface.setNodePosition(this.drag.nodeId, position);
+            return;
+        }
+        const point = this.#graphPoint(event);
+        const port = this.#portAt(point);
+        const node = port ? port.node : this.#nodeAt(point);
+        this.viewport.classList.toggle("port-hovered", Boolean(port));
+        this.viewport.classList.toggle(
+            "node-header-hovered",
+            Boolean(node && point.y - node.y <= node.headerHeight)
         );
+        const edge = node ? null : this.#edgeAt(point, 7);
         const id = edge?.id ?? null;
         if (id === this.hoveredEdgeId) return;
         this.hoveredEdgeId = id;
         this.viewport.classList.toggle("edge-hovered", Boolean(id));
-        this.#scheduleEdges();
+        this.#syncInteraction();
     }
 
-    #beginPan(event) {
-        event.preventDefault();
-        const start = {
-            x: event.clientX,
-            y: event.clientY,
-            left: this.viewport.scrollLeft,
-            top: this.viewport.scrollTop
-        };
-        this.viewport.setPointerCapture(event.pointerId);
-        this.viewport.classList.add("panning");
-        const move = (moveEvent) => {
-            this.viewport.scrollLeft =
-                start.left - (moveEvent.clientX - start.x);
-            this.viewport.scrollTop =
-                start.top - (moveEvent.clientY - start.y);
-        };
-        const finish = (upEvent) => {
-            if (this.viewport.hasPointerCapture(upEvent.pointerId)) {
-                this.viewport.releasePointerCapture(upEvent.pointerId);
-            }
-            this.viewport.removeEventListener("pointermove", move);
-            this.viewport.removeEventListener("pointerup", finish);
-            this.viewport.removeEventListener("pointercancel", finish);
-            this.viewport.classList.remove("panning");
-        };
-        this.viewport.addEventListener("pointermove", move);
-        this.viewport.addEventListener("pointerup", finish);
-        this.viewport.addEventListener("pointercancel", finish);
+    #handlePointerUp(event) {
+        if (this.drag?.pointerId !== event.pointerId) return;
+        if (this.viewport.hasPointerCapture(event.pointerId)) {
+            this.viewport.releasePointerCapture(event.pointerId);
+        }
+        const drag = this.drag;
+        this.drag = null;
+        this.viewport.classList.remove("panning", "dragging-node");
+        if (drag.kind !== "node") return;
+        const position = this.positions.get(drag.nodeId);
+        this.callbacks.onMoveNode?.(drag.nodeId, { ...position });
+        this.callbacks.onPositionsChange?.(this.getPositions());
+        this.prepared = this.#prepareScene();
     }
 
     #handleKeyDown(event) {
-        if (event.target.closest("input, select, textarea")) return;
         if (event.key === "Escape") {
             this.clearSelection();
             return;
@@ -760,66 +483,72 @@ export class NodeEditor {
         }
     }
 
-    #syncSelection() {
-        this.nodeLayer.querySelectorAll(".node-editor-node").forEach((node) =>
-            node.classList.toggle(
-                "selected",
-                node.dataset.nodeId === this.selectedNodeId
-            ));
-        const edge = this.model.edges.find(
+    #syncInteraction() {
+        this.surface.setInteraction({
+            selectedNodeId: this.selectedNodeId,
+            selectedEdgeId: this.selectedEdgeId,
+            hoveredEdgeId: this.hoveredEdgeId,
+            selectedPort: this.selectedPort
+        });
+        const edge = this.model?.edges.find(
             (entry) => entry.id === this.selectedEdgeId
         );
         if (edge) {
-            const source = this.nodeById.get(edge.from.nodeId);
-            const target = this.nodeById.get(edge.to.nodeId);
+            const source = this.model.nodes.find(
+                (node) => node.id === edge.from.nodeId
+            );
+            const target = this.model.nodes.find(
+                (node) => node.id === edge.to.nodeId
+            );
             this.selectionStatus.textContent =
-                `${source.label} → ${target.label} selected · Delete removes connection`;
+                `${source?.label ?? "Node"} → ${target?.label ?? "Node"} selected · Delete removes connection`;
         } else if (this.selectedNodeId) {
+            const node = this.model?.nodes.find(
+                (entry) => entry.id === this.selectedNodeId
+            );
             this.selectionStatus.textContent =
-                `${this.nodeById.get(this.selectedNodeId)?.label ?? "Node"} selected`;
-        } else {
-            this.selectionStatus.textContent = "WebGPU graph surface";
+                `${node?.label ?? "Node"} selected`;
         }
-        this.#scheduleEdges();
     }
 
     selectNode(nodeId) {
-        if (!this.nodeById.has(nodeId)) return;
+        if (!this.model?.nodes.some((node) => node.id === nodeId)) return;
         this.selectedNodeId = nodeId;
         this.selectedEdgeId = null;
-        this.#syncSelection();
+        this.selectedPort = null;
+        this.#syncInteraction();
         this.callbacks.onSelectNode?.(nodeId);
     }
 
     selectEdge(edgeId) {
-        const edge = this.model.edges.find((entry) => entry.id === edgeId);
+        const edge = this.model?.edges.find((entry) => entry.id === edgeId);
         if (!edge) return;
         this.selectedEdgeId = edgeId;
         this.selectedNodeId = null;
-        this.#syncSelection();
+        this.selectedPort = null;
+        this.#syncInteraction();
         this.callbacks.onSelectEdge?.(edgeId, edge);
     }
 
     clearSelection() {
-        if (!this.selectedNodeId && !this.selectedEdgeId) return;
+        if (
+            !this.selectedNodeId
+            && !this.selectedEdgeId
+            && !this.selectedPort
+        ) {
+            return;
+        }
         this.selectedNodeId = null;
         this.selectedEdgeId = null;
-        this.#syncSelection();
+        this.selectedPort = null;
+        this.#syncInteraction();
+        this.selectionStatus.textContent = "WebGPU graph surface";
         this.callbacks.onClearSelection?.();
     }
 
     autoLayout() {
         this.positions.clear();
-        const layout = layoutNodeEditorModel(this.model, this.layoutOptions);
-        layout.nodes.forEach((entry) =>
-            this.positions.set(entry.nodeId, { x: entry.x, y: entry.y }));
-        this.#calculateLayout();
-        this.#renderNodes();
-        this.#sizeScene();
-        this.#measurePortOffsets();
-        this.#calculateEdges();
-        this.#syncSelection();
-        this.callbacks.onPositionsChange?.(this.getPositions());
+        this.prepared = this.#prepareScene({ notifyPositions: true });
     }
 
     setView(view) {
@@ -828,7 +557,7 @@ export class NodeEditor {
             scrollLeft: Math.max(0, Number(view.scrollLeft) || 0),
             scrollTop: Math.max(0, Number(view.scrollTop) || 0)
         };
-        this.#sizeScene();
+        this.surface.setView(this.view);
         this.callbacks.onViewChange?.(this.getView());
     }
 
@@ -849,47 +578,44 @@ export class NodeEditor {
     }
 
     getPreviewTargets() {
-        return Object.freeze([...this.previewById.entries()].map(
-            ([id, preview]) => Object.freeze({
-                id,
-                node: preview.node,
-                canvas: preview.canvas
-            })
-        ));
+        if (!this.model) return Object.freeze([]);
+        return Object.freeze(this.model.nodes
+            .filter((node) => node.preview)
+            .map((node) => Object.freeze({ id: node.id, node })));
     }
 
     setPreviewStates(states) {
-        for (const [id, preview] of this.previewById) {
-            const next = states instanceof Map ? states.get(id) : states?.[id];
-            if (!next) continue;
-            const state = typeof next === "string"
-                ? next
-                : next.state ?? "unavailable";
-            preview.element.dataset.previewState = state;
-            preview.state.textContent = typeof next === "string"
-                ? next
-                : next.label ?? (
-                    state === "ready" ? "Live GPU" : "Preview unavailable"
-                );
-        }
+        this.previewStates = states instanceof Map
+            ? new Map(states)
+            : new Map(Object.entries(states ?? {}));
+        this.surface.setPreviewTextures(this.previewStates);
+    }
+
+    setPreviewTextures(textures) {
+        this.setPreviewStates(textures);
     }
 
     stats() {
         return Object.freeze({
             nodeCount: this.model?.nodes.length ?? 0,
             edgeCount: this.model?.edges.length ?? 0,
-            backend: this.edgeLayer.pipeline ? "webgpu" : "initializing",
+            ...this.surface.stats(),
             zoom: this.view.zoom
         });
     }
 
     destroy() {
-        cancelAnimationFrame(this.scrollFrame);
-        cancelAnimationFrame(this.edgeFrame);
+        this.destroyed = true;
+        this.prepareRevision += 1;
         this.cleanup.forEach((cleanup) => cleanup());
-        this.edgeLayer.destroy();
+        this.worker.destroy();
+        this.surface.destroy();
         this.container.replaceChildren();
-        this.container.classList.remove("node-editor", "gpu-unavailable");
+        this.container.classList.remove(
+            "node-editor",
+            "node-editor-gpu-only",
+            "gpu-unavailable"
+        );
     }
 }
 

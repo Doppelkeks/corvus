@@ -6,14 +6,16 @@ export {
     DEFAULT_LAYOUT,
     layoutNodeEditorModel
 } from "./layout.js";
-export { socketOffsetInNode } from "./port-geometry.js";
 export {
     cubicControls,
     distanceToSegment,
     hitTestEdges,
     sampleCubicEdge
 } from "./edge-geometry.js";
-export { WebGpuEdgeLayer } from "./webgpu-edge-layer.js";
+export { WebGpuGraphSurface } from "./webgpu-graph-surface.js";
+export { buildGraphScene, GRAPH_SCENE_METRICS, GRAPH_SCENE_STRIDES }
+    from "./graph-scene.js";
+export { GraphWorkerClient } from "./graph-worker-client.js";
 export {
     NodeEditor,
     createNodeEditor

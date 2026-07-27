@@ -41,24 +41,56 @@ export function layoutNodeEditorModel(model, {
         ? settings.paddingY
         : settings.padding;
     const incoming = new Map(model.nodes.map((node) => [node.id, []]));
+    const outgoing = new Map(model.nodes.map((node) => [node.id, []]));
     for (const edge of model.edges) {
         incoming.get(edge.to.nodeId)?.push(edge.from.nodeId);
+        outgoing.get(edge.from.nodeId)?.push(edge.to.nodeId);
     }
-    const depthById = new Map();
-    const visiting = new Set();
-    const depthOf = (nodeId) => {
-        if (depthById.has(nodeId)) return depthById.get(nodeId);
-        if (visiting.has(nodeId)) return 0;
-        visiting.add(nodeId);
-        const depth = (incoming.get(nodeId) ?? []).reduce(
-            (maximum, sourceId) => Math.max(maximum, depthOf(sourceId) + 1),
-            0
-        );
-        visiting.delete(nodeId);
-        depthById.set(nodeId, depth);
-        return depth;
-    };
-    model.nodes.forEach((node) => depthOf(node.id));
+    const depthById = new Map(model.nodes.map((node) => [node.id, 0]));
+    const indegree = new Map(model.nodes.map((node) => [
+        node.id,
+        incoming.get(node.id).length
+    ]));
+    const orderedIds = [...model.nodes]
+        .sort((left, right) =>
+            left.order - right.order || left.id.localeCompare(right.id))
+        .map((node) => node.id);
+    const queue = orderedIds.filter((nodeId) => indegree.get(nodeId) === 0);
+    const processed = new Set();
+    let queueIndex = 0;
+    let breakIndex = 0;
+    while (processed.size < model.nodes.length) {
+        if (queueIndex >= queue.length) {
+            while (
+                breakIndex < orderedIds.length
+                && processed.has(orderedIds[breakIndex])
+            ) {
+                breakIndex += 1;
+            }
+            const cycleBreak = orderedIds[breakIndex];
+            if (!cycleBreak) break;
+            // Break one deterministic back-edge when a cycle is present.
+            // Layout remains usable without recursive traversal or stack risk.
+            indegree.set(cycleBreak, 0);
+            queue.push(cycleBreak);
+        }
+        const nodeId = queue[queueIndex++];
+        if (processed.has(nodeId)) continue;
+        processed.add(nodeId);
+        for (const targetId of outgoing.get(nodeId)) {
+            if (processed.has(targetId)) continue;
+            depthById.set(
+                targetId,
+                Math.max(
+                    depthById.get(targetId),
+                    depthById.get(nodeId) + 1
+                )
+            );
+            const nextIndegree = indegree.get(targetId) - 1;
+            indegree.set(targetId, nextIndegree);
+            if (nextIndegree === 0) queue.push(targetId);
+        }
+    }
     const maximumOperationDepth = model.nodes.reduce((maximum, node) =>
         node.terminal
             ? maximum
