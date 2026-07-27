@@ -50,6 +50,8 @@ describe("GPU-only graph surface architecture", () => {
         expect(surface).toContain("nodeSelectionBuffer");
         expect(shaders).toContain("INTERACTION_OVERLAY_SHADER");
         expect(shaders).toContain("nodeSelection[nodeIndex]");
+        expect(shaders).toContain("topRoundedDistance");
+        expect(shaders).toContain("shapeInfo.z == 4.0");
     });
 
     it("uses antialiased GPU text and renders a quiet line grid", () => {

@@ -182,6 +182,7 @@ export function buildGraphScene(model, layout, options = {}) {
     ]));
     const nodeRecords = [];
     const underlayShapes = [];
+    const selectionShapes = [];
     const overlayShapes = [];
     const glyphs = [];
     const previews = [];
@@ -198,7 +199,7 @@ export function buildGraphScene(model, layout, options = {}) {
             [0, 0, box.width, box.height],
             [0.05, 0.052, 0.048, 0.98],
             [0.2, 0.21, 0.19, 1],
-            [6, 1, 1, nodeIndex]
+            [6, 1, 3, nodeIndex]
         );
         pushShape(
             underlayShapes,
@@ -206,6 +207,13 @@ export function buildGraphScene(model, layout, options = {}) {
             CATEGORY_COLORS[node.category] ?? CATEGORY_COLORS.default,
             [0.12, 0.14, 0.15, 1],
             [6, 0, 0, nodeIndex]
+        );
+        pushShape(
+            selectionShapes,
+            [0, 0, box.width, box.height],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [6, 1.5, 4, nodeIndex]
         );
         pushText(glyphs, node.label, {
             x: 12,
@@ -354,13 +362,19 @@ export function buildGraphScene(model, layout, options = {}) {
 
     const underlayShapeCount =
         underlayShapes.length / GRAPH_SCENE_STRIDES.shape;
+    const selectionShapeCount =
+        selectionShapes.length / GRAPH_SCENE_STRIDES.shape;
     const portShapeIndexByKey = Object.fromEntries(
         Object.entries(portOverlayShapeIndexByKey).map(([key, index]) => [
             key,
-            underlayShapeCount + index
+            underlayShapeCount + selectionShapeCount + index
         ])
     );
-    const shapes = [...underlayShapes, ...overlayShapes];
+    const shapes = [
+        ...underlayShapes,
+        ...selectionShapes,
+        ...overlayShapes
+    ];
     return {
         layout,
         nodeRecords: new Float32Array(nodeRecords),

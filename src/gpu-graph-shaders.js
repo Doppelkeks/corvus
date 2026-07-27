@@ -94,7 +94,7 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
         nextFill.a = 0.0;
         border.a = 0.0;
     } else if (
-        (shapeInfo.z == 1.0 && nodeSelection[nodeIndex] != 0u)
+        (shapeInfo.z == 4.0 && nodeSelection[nodeIndex] != 0u)
         || f32(index) == camera.display.y
     ) {
         border = vec4f(0.72, 0.95, 0.42, 1.0);
@@ -179,6 +179,26 @@ struct VertexOutput {
     @location(4) shapeInfo: vec4f,
 }
 
+fn topRoundedDistance(uv: vec2f, size: vec2f, radius: f32) -> f32 {
+    let local = uv * size;
+    let edgeDistance = min(
+        min(local.x, size.x - local.x),
+        min(local.y, size.y - local.y)
+    );
+    if (local.y >= radius) {
+        return -edgeDistance;
+    }
+    if (local.x < radius) {
+        return length(local - vec2f(radius, radius)) - radius;
+    }
+    if (local.x > size.x - radius) {
+        return length(
+            local - vec2f(size.x - radius, radius)
+        ) - radius;
+    }
+    return -edgeDistance;
+}
+
 @vertex
 fn vertexMain(
     @builtin(vertex_index) vertexIndex: u32,
@@ -220,10 +240,13 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
         input.shapeInfo.x * camera.state.x,
         min(input.size.x, input.size.y) * 0.5
     );
-    let centered = (input.uv - vec2f(0.5)) * input.size;
-    let q = abs(centered) - input.size * 0.5 + vec2f(radius);
-    let distance = length(max(q, vec2f(0.0)))
-        + min(max(q.x, q.y), 0.0) - radius;
+    var distance = topRoundedDistance(input.uv, input.size, radius);
+    if (input.shapeInfo.z != 3.0 && input.shapeInfo.z != 4.0) {
+        let centered = (input.uv - vec2f(0.5)) * input.size;
+        let q = abs(centered) - input.size * 0.5 + vec2f(radius);
+        distance = length(max(q, vec2f(0.0)))
+            + min(max(q.x, q.y), 0.0) - radius;
+    }
     let aa = max(fwidth(distance), 0.75);
     let outer = 1.0 - smoothstep(-aa, aa, distance);
     let borderWidth = input.shapeInfo.y * camera.state.x;

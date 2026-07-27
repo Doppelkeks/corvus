@@ -151,6 +151,41 @@ describe("buildGraphScene", () => {
         expect(headerFill[2]).toBeLessThan(headerFill[1]);
     });
 
+    it("packs a top-rounded card and unobscured selection overlay", () => {
+        const model = normalizeNodeEditorModel({
+            id: "selection-outline",
+            nodes: [{
+                id: "selected",
+                label: "Selected node"
+            }],
+            edges: []
+        });
+        const scene = buildGraphScene(
+            model,
+            layoutNodeEditorModel(model)
+        );
+        const bodyMeta = scene.shapes.slice(12, 16);
+        const selectionOffset =
+            scene.underlayShapeCount * GRAPH_SCENE_STRIDES.shape;
+        const selectionFill = scene.shapes.slice(
+            selectionOffset + 4,
+            selectionOffset + 8
+        );
+        const selectionBorder = scene.shapes.slice(
+            selectionOffset + 8,
+            selectionOffset + 12
+        );
+        const selectionMeta = scene.shapes.slice(
+            selectionOffset + 12,
+            selectionOffset + 16
+        );
+
+        expect([...bodyMeta]).toEqual([6, 1, 3, 0]);
+        expect([...selectionFill]).toEqual([0, 0, 0, 0]);
+        expect([...selectionBorder]).toEqual([0, 0, 0, 0]);
+        expect([...selectionMeta]).toEqual([6, 1.5, 4, 0]);
+    });
+
     it("packs release-scale graphs into bounded transferable arrays", () => {
         const nodeCount = 2_048;
         const model = normalizeNodeEditorModel({
