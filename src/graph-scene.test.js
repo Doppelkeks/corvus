@@ -64,6 +64,36 @@ describe("buildGraphScene", () => {
         expect(edgeStart.y).toBe(source.y + output.y);
     });
 
+    it("overlays preview-node connectors within the preview bounds", () => {
+        const model = normalizeNodeEditorModel({
+            id: "overlay-ports",
+            nodes: [{
+                id: "bundle",
+                label: "Bundle Compose",
+                preview: { aspectRatio: 1 },
+                inputs: Array.from({ length: 9 }, (_, index) => ({
+                    id: `input-${index}`,
+                    type: "color"
+                })),
+                outputs: [{ id: "material", type: "bundle" }]
+            }],
+            edges: []
+        });
+        const scene = buildGraphScene(
+            model,
+            layoutNodeEditorModel(model)
+        );
+        const preview = scene.previews.slice(0, 4);
+        const ports = scene.hitNodes[0].ports;
+
+        expect(ports.every((port) =>
+            port.y >= preview[1]
+            && port.y <= preview[1] + preview[3])).toBe(true);
+        expect(scene.underlayShapeCount).toBeLessThan(
+            scene.shapes.length / GRAPH_SCENE_STRIDES.shape
+        );
+    });
+
     it("renders square previews without parameter text on graph cards", () => {
         const withSummary = normalizeNodeEditorModel({
             ...fixture(),

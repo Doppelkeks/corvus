@@ -1,7 +1,7 @@
 import { sampleCubicEdge } from "./edge-geometry.js";
 import {
     NODE_CARD_GEOMETRY,
-    nodePortSectionTop,
+    nodePortYPositions,
     nodePreviewRect
 } from "./node-card-geometry.js";
 
@@ -114,21 +114,32 @@ function edgeTypeIndex(type) {
 }
 
 function localPortAnchors(node, box, metrics) {
-    const portTop = nodePortSectionTop(node, box.width, metrics);
+    const inputY = nodePortYPositions(
+        node,
+        "input",
+        box.width,
+        metrics
+    );
+    const outputY = nodePortYPositions(
+        node,
+        "output",
+        box.width,
+        metrics
+    );
     const ports = [];
     node.inputs.forEach((port, index) => ports.push(Object.freeze({
         id: port.id,
         direction: "input",
         type: port.type,
         x: 0,
-        y: portTop + (index + 0.5) * metrics.portRowHeight
+        y: inputY[index]
     })));
     node.outputs.forEach((port, index) => ports.push(Object.freeze({
         id: port.id,
         direction: "output",
         type: port.type,
         x: box.width,
-        y: portTop + (index + 0.5) * metrics.portRowHeight
+        y: outputY[index]
     })));
     return Object.freeze(ports);
 }
@@ -162,26 +173,27 @@ export function buildGraphScene(model, layout, options = {}) {
         index
     ]));
     const nodeRecords = [];
-    const shapes = [];
+    const underlayShapes = [];
+    const overlayShapes = [];
     const glyphs = [];
     const previews = [];
     const hitNodes = [];
     const spatialCells = {};
-    const portShapeIndexByKey = {};
+    const portOverlayShapeIndexByKey = {};
 
     model.nodes.forEach((node, nodeIndex) => {
         const box = layoutById.get(node.id);
         const ports = localPortAnchors(node, box, metrics);
         nodeRecords.push(box.x, box.y, box.width, box.height);
         pushShape(
-            shapes,
+            underlayShapes,
             [0, 0, box.width, box.height],
             [0.05, 0.052, 0.048, 0.98],
             [0.2, 0.21, 0.19, 1],
             [6, 1, 1, nodeIndex]
         );
         pushShape(
-            shapes,
+            underlayShapes,
             [0, 0, box.width, metrics.headerHeight],
             CATEGORY_COLORS[node.category] ?? CATEGORY_COLORS.default,
             [0.12, 0.14, 0.15, 1],
@@ -203,7 +215,7 @@ export function buildGraphScene(model, layout, options = {}) {
                 preview.height
             ];
             pushShape(
-                shapes,
+                underlayShapes,
                 rect,
                 [0.028, 0.03, 0.027, 1],
                 [0.1, 0.11, 0.095, 1],
@@ -214,13 +226,29 @@ export function buildGraphScene(model, layout, options = {}) {
 
         ports.forEach((port) => {
             const color = PORT_COLORS[port.type] ?? PORT_COLORS.value;
-            portShapeIndexByKey[
-                `${node.id}\u0000${port.id}\u0000${port.direction}`
-            ] = shapes.length / GRAPH_SCENE_STRIDES.shape;
+            const maximumCharacters = 14;
+            const labelLength = Math.min(
+                String(port.id).length,
+                maximumCharacters
+            );
+            const labelWidth = labelLength * 5.5 + 14;
+            const labelX = port.direction === "input"
+                ? 5
+                : box.width - labelWidth - 5;
             pushShape(
-                shapes,
+                overlayShapes,
+                [labelX, port.y - 7, labelWidth, 14],
+                [0.025, 0.03, 0.025, 0.82],
+                [0.14, 0.16, 0.13, 0.92],
+                [3, 0.75, 0, nodeIndex]
+            );
+            portOverlayShapeIndexByKey[
+                `${node.id}\u0000${port.id}\u0000${port.direction}`
+            ] = overlayShapes.length / GRAPH_SCENE_STRIDES.shape;
+            pushShape(
+                overlayShapes,
                 [port.x - 4.5, port.y - 4.5, 9, 9],
-                [0.035, 0.045, 0.05, 1],
+                [0.035, 0.04, 0.034, 1],
                 color,
                 [4.5, 1.25, 2, nodeIndex]
             );
@@ -228,10 +256,10 @@ export function buildGraphScene(model, layout, options = {}) {
                 x: port.direction === "input" ? 10 : box.width - 10,
                 y: port.y - 4,
                 nodeIndex,
-                color: TEXT.muted,
+                color: TEXT.primary,
                 width: 5.5,
                 height: 9,
-                maximum: 14,
+                maximum: maximumCharacters,
                 align: port.direction === "output" ? "right" : "left"
             });
         });
@@ -313,10 +341,20 @@ export function buildGraphScene(model, layout, options = {}) {
         );
     });
 
+    const underlayShapeCount =
+        underlayShapes.length / GRAPH_SCENE_STRIDES.shape;
+    const portShapeIndexByKey = Object.fromEntries(
+        Object.entries(portOverlayShapeIndexByKey).map(([key, index]) => [
+            key,
+            underlayShapeCount + index
+        ])
+    );
+    const shapes = [...underlayShapes, ...overlayShapes];
     return {
         layout,
         nodeRecords: new Float32Array(nodeRecords),
         shapes: new Float32Array(shapes),
+        underlayShapeCount,
         glyphs: new Float32Array(glyphs),
         edges: new Float32Array(edgeRecords),
         previews: new Float32Array(previews),

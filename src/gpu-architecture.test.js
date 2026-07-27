@@ -31,6 +31,10 @@ describe("GPU-only graph surface architecture", () => {
         expect(surface.match(/createComputePipeline/g)).toHaveLength(2);
         expect(surface).toContain("edge tessellation");
         expect(surface).toContain("shape transform and cull");
+        expect(surface).toContain("underlayShapeCount");
+        expect(surface).toContain(
+            "pass.draw(6, overlayShapeCount, 0, underlayShapeCount)"
+        );
         expect(worker).toContain("buildGraphScene");
         expect(worker).toContain("transferableScene");
     });

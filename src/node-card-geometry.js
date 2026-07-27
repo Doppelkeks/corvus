@@ -5,6 +5,7 @@ export const NODE_CARD_GEOMETRY = Object.freeze({
     previewInset: 8,
     portSectionGap: 8,
     portRowHeight: 20,
+    overlayPortPadding: 10,
     bottomPadding: 8
 });
 
@@ -33,8 +34,41 @@ export function nodePortSectionTop(node, width, overrides = {}) {
         : metrics.headerHeight + metrics.portSectionGap;
 }
 
+export function nodePortYPositions(
+    node,
+    direction,
+    width,
+    overrides = {}
+) {
+    const metrics = { ...NODE_CARD_GEOMETRY, ...overrides };
+    const ports = direction === "input" ? node.inputs : node.outputs;
+    const preview = nodePreviewRect(node, width, metrics);
+    if (!preview) {
+        const top = nodePortSectionTop(node, width, metrics);
+        return Object.freeze(ports.map((_, index) =>
+            top + (index + 0.5) * metrics.portRowHeight));
+    }
+    if (ports.length === 0) return Object.freeze([]);
+    const padding = Math.min(
+        metrics.overlayPortPadding,
+        preview.height * 0.16
+    );
+    const availableHeight = Math.max(1, preview.height - padding * 2);
+    return Object.freeze(ports.map((_, index) =>
+        preview.y
+        + padding
+        + availableHeight * ((index + 0.5) / ports.length)));
+}
+
 export function nodeCardHeight(node, width, overrides = {}) {
     const metrics = { ...NODE_CARD_GEOMETRY, ...overrides };
+    const preview = nodePreviewRect(node, width, metrics);
+    if (preview) {
+        return Math.max(
+            metrics.minimumNodeHeight,
+            preview.y + preview.height + metrics.previewInset
+        );
+    }
     const rows = Math.max(node.inputs.length, node.outputs.length, 1);
     return Math.max(
         metrics.minimumNodeHeight,

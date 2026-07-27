@@ -66,7 +66,7 @@ describe("layoutNodeEditorModel", () => {
         expect(layout.nodes[0]).toMatchObject({ x: 260, y: 70 });
     });
 
-    it("reserves card space only for nodes with generated previews", () => {
+    it("reserves compact card space only for nodes with previews", () => {
         const source = model();
         const plain = layoutNodeEditorModel(source);
         const withPreview = layoutNodeEditorModel(normalizeNodeEditorModel({
@@ -74,6 +74,8 @@ describe("layoutNodeEditorModel", () => {
             nodes: source.nodes.map((node) => ({
                 ...node,
                 preview: node.id === "a"
+                    ? { aspectRatio: 1 }
+                    : null
             }))
         }));
         const plainA = plain.nodes.find((node) => node.nodeId === "a");
@@ -82,6 +84,30 @@ describe("layoutNodeEditorModel", () => {
         expect(previewA.height).toBeGreaterThanOrEqual(
             plainA.height + 96
         );
+    });
+
+    it("does not grow preview cards when connector counts increase", () => {
+        const previewNode = (id, inputCount) => ({
+            id,
+            preview: { aspectRatio: 1 },
+            inputs: Array.from({ length: inputCount }, (_, index) => ({
+                id: `input-${index}`
+            })),
+            outputs: [{ id: "out" }]
+        });
+        const layout = layoutNodeEditorModel(normalizeNodeEditorModel({
+            id: "compact-preview-connectors",
+            nodes: [
+                previewNode("few", 1),
+                previewNode("many", 9)
+            ],
+            edges: []
+        }));
+        const few = layout.nodes.find((node) => node.nodeId === "few");
+        const many = layout.nodes.find((node) => node.nodeId === "many");
+
+        expect(many.height).toBe(few.height);
+        expect(many.height).toBe(268);
     });
 
     it("keeps parameter summaries out of graph card geometry", () => {

@@ -524,12 +524,25 @@ export class WebGpuGraphSurface {
                 edgeCount * EDGE_SEGMENTS * EDGE_VERTICES_PER_SEGMENT
             );
         }
-        if (shapeCount > 0) {
+        const underlayShapeCount = Math.max(
+            0,
+            Math.min(
+                shapeCount,
+                this.scene.underlayShapeCount ?? shapeCount
+            )
+        );
+        if (underlayShapeCount > 0) {
             pass.setPipeline(this.shapePipeline);
             pass.setBindGroup(0, this.shapeBindGroup);
-            pass.draw(6, shapeCount);
+            pass.draw(6, underlayShapeCount);
         }
         this.#drawPreviews(pass);
+        const overlayShapeCount = shapeCount - underlayShapeCount;
+        if (overlayShapeCount > 0) {
+            pass.setPipeline(this.shapePipeline);
+            pass.setBindGroup(0, this.shapeBindGroup);
+            pass.draw(6, overlayShapeCount, 0, underlayShapeCount);
+        }
         const glyphCount = this.scene.glyphs.length / 16;
         if (glyphCount > 0) {
             pass.setPipeline(this.glyphPipeline);
