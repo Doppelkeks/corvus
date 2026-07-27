@@ -267,6 +267,97 @@
     text-transform: uppercase;
 }
 
+.node-editor-node-preview {
+    position: relative;
+    height: 124px;
+    margin: 0;
+    overflow: hidden;
+    border-bottom: 1px solid #ffffff0d;
+    background:
+        linear-gradient(135deg, #11171a 0%, #0b0e10 100%);
+}
+
+.node-editor-node-preview::before {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    background:
+        linear-gradient(90deg, transparent 0 47%, #ffffff08 50%, transparent 53%) 0 0 / 220% 100%;
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+}
+
+.node-editor-node-preview[data-preview-state="loading"]::before {
+    animation: node-editor-preview-loading 1.4s linear infinite;
+    opacity: 1;
+}
+
+.node-editor-node-preview-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+.node-editor-node-preview[data-preview-state="ready"] .node-editor-node-preview-canvas,
+.node-editor-node-preview[data-preview-state="refreshing"] .node-editor-node-preview-canvas {
+    opacity: 1;
+}
+
+.node-editor-node-preview-state {
+    position: absolute;
+    z-index: 2;
+    right: 7px;
+    bottom: 7px;
+    max-width: calc(100% - 14px);
+    overflow: hidden;
+    padding: 4px 6px;
+    border: 1px solid #ffffff17;
+    border-radius: 999px;
+    background: #090c0edb;
+    color: #8d999e;
+    font: 700 6px/1 ui-monospace, Consolas, monospace;
+    letter-spacing: .04em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.node-editor-node-preview[data-preview-state="ready"] .node-editor-node-preview-state {
+    border-color: color-mix(in srgb, var(--node-editor-accent) 34%, transparent);
+    color: var(--node-editor-accent);
+}
+
+.node-editor-node-preview[data-preview-state="unavailable"] .node-editor-node-preview-state,
+.node-editor-node-preview[data-preview-state="error"] .node-editor-node-preview-state {
+    right: 50%;
+    bottom: 50%;
+    max-width: calc(100% - 20px);
+    transform: translate(50%, 50%);
+    border-color: #ffffff12;
+    color: #778188;
+    text-align: center;
+}
+
+@keyframes node-editor-preview-loading {
+    from {
+        background-position: 100% 0;
+    }
+
+    to {
+        background-position: -100% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .node-editor-node-preview::before {
+        animation: none !important;
+    }
+}
+
 .node-editor-ports {
     display: grid;
     grid-template-columns: 1fr 1fr;

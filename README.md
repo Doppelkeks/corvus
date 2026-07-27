@@ -16,6 +16,7 @@ const model = {
     category: "input",
     inputs: [],
     outputs: [{ id: "out", label: "Output", type: "color" }],
+    preview: { label: "Generated output", aspectRatio: 16 / 9 },
     summary: [{ label: "seed", value: "42" }]
   }, {
     id: "result",
@@ -65,7 +66,11 @@ editor.update(model, {
 ```
 
 The returned editor also provides `autoLayout`, `zoomBy`, `resetView`,
-`getPositions`, `getView`, `stats`, and `destroy`.
+`getPositions`, `getView`, `getPreviewTargets`, `setPreviewStates`, `stats`,
+and `destroy`. Preview canvases are deliberately renderer-agnostic: hosts
+receive the live canvas targets, paint them with their own GPU/runtime, and
+report `ready`, `loading`, `unavailable`, or `error` states. No thumbnail
+assets are stored by the framework.
 
 Existing nodes retain their presentation coordinates when edges or domain data
 change. Automatic layout is recalculated only for new nodes or when

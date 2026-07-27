@@ -16,6 +16,26 @@ function normalizePort(port, path) {
     });
 }
 
+function normalizePreview(preview, path) {
+    if (preview === undefined || preview === null || preview === false) {
+        return null;
+    }
+    if (preview !== true && (typeof preview !== "object" || Array.isArray(preview))) {
+        throw new Error(`${path} must be a boolean or preview descriptor`);
+    }
+    const descriptor = preview === true ? {} : preview;
+    return Object.freeze({
+        ...descriptor,
+        label: typeof descriptor.label === "string"
+            ? descriptor.label
+            : "Generated preview",
+        aspectRatio: Number.isFinite(descriptor.aspectRatio)
+            && descriptor.aspectRatio > 0
+            ? descriptor.aspectRatio
+            : 16 / 9
+    });
+}
+
 export function createEdgeId(edge) {
     return edge?.id ?? [
         edge?.from?.nodeId,
@@ -41,6 +61,7 @@ export function normalizeNodeEditorModel(model) {
             type: typeof node.type === "string" ? node.type : "",
             category: typeof node.category === "string" ? node.category : "default",
             order: Number.isFinite(node.order) ? node.order : index,
+            preview: normalizePreview(node.preview, `nodes[${index}].preview`),
             inputs: Object.freeze((node.inputs ?? []).map((port, portIndex) =>
                 normalizePort(port, `nodes[${index}].inputs[${portIndex}]`))),
             outputs: Object.freeze((node.outputs ?? []).map((port, portIndex) =>

@@ -3,7 +3,7 @@ import {
     hitTestEdges,
     sampleCubicEdge
 } from "./edge-geometry.js";
-import { layoutNodeEditorModel } from "./layout.js";
+import { DEFAULT_LAYOUT, layoutNodeEditorModel } from "./layout.js";
 import { normalizeNodeEditorModel } from "./model.js";
 import { WebGpuEdgeLayer } from "./webgpu-edge-layer.js";
 
@@ -86,6 +86,7 @@ export class NodeEditor {
         this.layoutById = new Map();
         this.edgeGeometry = [];
         this.nodeById = new Map();
+        this.previewById = new Map();
         this.selectedNodeId = null;
         this.selectedEdgeId = null;
         this.hoveredEdgeId = null;
@@ -307,6 +308,7 @@ export class NodeEditor {
 
     #renderNodes() {
         const fragment = document.createDocumentFragment();
+        const previewById = new Map();
         for (const node of this.model.nodes) {
             const box = this.layoutById.get(node.id);
             const card = element(
@@ -341,6 +343,36 @@ export class NodeEditor {
             header.title = "Drag to move node";
             this.#bindNodeDrag(header, card, node, box);
             card.append(header);
+
+            if (node.preview) {
+                const preview = element("figure", "node-editor-node-preview");
+                preview.dataset.previewState = "loading";
+                const canvas = document.createElement("canvas");
+                canvas.className = "node-editor-node-preview-canvas";
+                canvas.dataset.nodePreview = node.id;
+                canvas.width = 384;
+                canvas.height = Math.max(
+                    1,
+                    Math.round(canvas.width / node.preview.aspectRatio)
+                );
+                canvas.setAttribute(
+                    "aria-label",
+                    `${node.label}: ${node.preview.label}`
+                );
+                const state = element(
+                    "figcaption",
+                    "node-editor-node-preview-state",
+                    "Waiting for GPU"
+                );
+                preview.append(canvas, state);
+                card.append(preview);
+                previewById.set(node.id, {
+                    node,
+                    element: preview,
+                    canvas,
+                    state
+                });
+            }
 
             const ports = element("div", "node-editor-ports");
             const inputs = element("ul", "node-editor-inputs");
@@ -383,6 +415,7 @@ export class NodeEditor {
             fragment.append(card);
         }
         this.nodeLayer.replaceChildren(fragment);
+        this.previewById = previewById;
     }
 
     #bindNodeDrag(header, card, node, box) {
@@ -435,9 +468,18 @@ export class NodeEditor {
     #portAnchor(box, node, portId, direction) {
         const ports = direction === "output" ? node.outputs : node.inputs;
         const index = Math.max(0, ports.findIndex((port) => port.id === portId));
+        const headerHeight = Number.isFinite(this.layoutOptions.headerHeight)
+            ? this.layoutOptions.headerHeight
+            : DEFAULT_LAYOUT.headerHeight;
+        const previewHeight = node.preview
+            ? (Number.isFinite(this.layoutOptions.previewHeight)
+                ? this.layoutOptions.previewHeight
+                : DEFAULT_LAYOUT.previewHeight)
+            : 0;
         return {
             x: direction === "output" ? box.x + box.width : box.x,
-            y: box.y + 48 + (index + 0.5) * 20
+            y: box.y + headerHeight + previewHeight
+                + (index + 0.5) * 20
         };
     }
 
@@ -756,6 +798,32 @@ export class NodeEditor {
 
     getPositions() {
         return Object.freeze(positionObject(this.positions));
+    }
+
+    getPreviewTargets() {
+        return Object.freeze([...this.previewById.entries()].map(
+            ([id, preview]) => Object.freeze({
+                id,
+                node: preview.node,
+                canvas: preview.canvas
+            })
+        ));
+    }
+
+    setPreviewStates(states) {
+        for (const [id, preview] of this.previewById) {
+            const next = states instanceof Map ? states.get(id) : states?.[id];
+            if (!next) continue;
+            const state = typeof next === "string"
+                ? next
+                : next.state ?? "unavailable";
+            preview.element.dataset.previewState = state;
+            preview.state.textContent = typeof next === "string"
+                ? next
+                : next.label ?? (
+                    state === "ready" ? "Live GPU" : "Preview unavailable"
+                );
+        }
     }
 
     stats() {

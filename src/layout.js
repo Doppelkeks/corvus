@@ -5,6 +5,7 @@ const DEFAULT_LAYOUT = Object.freeze({
     nodeWidth: 220,
     minimumNodeHeight: 96,
     headerHeight: 48,
+    previewHeight: 124,
     portRowHeight: 20,
     summaryRowHeight: 16
 });
@@ -22,6 +23,7 @@ function nodeHeight(node, settings) {
     return Math.max(
         settings.minimumNodeHeight,
         settings.headerHeight
+            + (node.preview ? settings.previewHeight : 0)
             + rows * settings.portRowHeight
             + Math.min(node.summary.length, 3) * settings.summaryRowHeight
     );

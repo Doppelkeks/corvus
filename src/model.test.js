@@ -37,4 +37,25 @@ describe("node editor model", () => {
             }]
         })).toThrow(/missing node/);
     });
+
+    it("normalizes optional generated-preview descriptors", () => {
+        const model = normalizeNodeEditorModel({
+            nodes: [
+                { id: "plain" },
+                { id: "live", preview: { label: "Live value", channel: "out" } }
+            ],
+            edges: []
+        });
+
+        expect(model.nodes[0].preview).toBeNull();
+        expect(model.nodes[1].preview).toMatchObject({
+            label: "Live value",
+            aspectRatio: 16 / 9,
+            channel: "out"
+        });
+        expect(() => normalizeNodeEditorModel({
+            nodes: [{ id: "bad", preview: "thumbnail.png" }],
+            edges: []
+        })).toThrow(/preview descriptor/);
+    });
 });

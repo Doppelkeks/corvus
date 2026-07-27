@@ -65,4 +65,22 @@ describe("layoutNodeEditorModel", () => {
         });
         expect(layout.nodes[0]).toMatchObject({ x: 260, y: 70 });
     });
+
+    it("reserves card space only for nodes with generated previews", () => {
+        const source = model();
+        const plain = layoutNodeEditorModel(source);
+        const withPreview = layoutNodeEditorModel(normalizeNodeEditorModel({
+            ...source,
+            nodes: source.nodes.map((node) => ({
+                ...node,
+                preview: node.id === "a"
+            }))
+        }));
+        const plainA = plain.nodes.find((node) => node.nodeId === "a");
+        const previewA = withPreview.nodes.find((node) => node.nodeId === "a");
+
+        expect(previewA.height).toBeGreaterThanOrEqual(
+            plainA.height + 96
+        );
+    });
 });
