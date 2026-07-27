@@ -380,10 +380,16 @@ fn vertexMain(
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let sample = textureSample(atlasTexture, atlasSampler, input.uv);
-    let edgeWidth = max(fwidth(sample.a), 0.025);
+    let edgeWidth = clamp(fwidth(sample.a) * 0.72, 0.012, 0.12);
+    let smallTextWeight = clamp(
+        (1.0 - camera.state.x) / 0.65,
+        0.0,
+        1.0
+    );
+    let threshold = 0.5 - smallTextWeight * 0.08;
     let coverage = smoothstep(
-        0.5 - edgeWidth,
-        0.5 + edgeWidth,
+        threshold - edgeWidth,
+        threshold + edgeWidth,
         sample.a
     );
     return vec4f(input.color.rgb, input.color.a * coverage);

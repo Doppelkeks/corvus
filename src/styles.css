@@ -51,7 +51,7 @@
     background: transparent;
     color: var(--node-editor-muted, #7c8178);
     padding: 0 14px;
-    font: 700 8px/1 ui-sans-serif, system-ui, sans-serif;
+    font: 700 9px/1 "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
     letter-spacing: .06em;
     text-transform: uppercase;
     cursor: pointer;
@@ -94,7 +94,7 @@
     background: rgba(0, 0, 0, .2);
     color: var(--node-editor-muted, #7c8178);
     padding: 0 4px;
-    font: 7px/1 ui-sans-serif, system-ui, sans-serif;
+    font: 8px/1 "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
     cursor: pointer;
 }
 

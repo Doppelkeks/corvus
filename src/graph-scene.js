@@ -15,8 +15,8 @@ export const GRAPH_SCENE_STRIDES = Object.freeze({
 
 export const GRAPH_SCENE_METRICS = Object.freeze({
     ...NODE_CARD_GEOMETRY,
-    glyphWidth: 6.5,
-    glyphHeight: 10,
+    glyphWidth: 7.5,
+    glyphHeight: 13,
     spatialCellSize: 256
 });
 
@@ -41,7 +41,7 @@ const PORT_COLORS = Object.freeze({
 });
 
 const TEXT = Object.freeze({
-    primary: [0.78, 0.82, 0.83, 1],
+    primary: [0.88, 0.9, 0.88, 1],
     muted: [0.43, 0.48, 0.5, 1],
     accent: [0.72, 0.95, 0.42, 1]
 });
@@ -219,7 +219,7 @@ export function buildGraphScene(model, layout, options = {}) {
         );
         pushText(glyphs, node.label, {
             x: 12,
-            y: 12,
+            y: 10.5,
             nodeIndex,
             maximum: 28
         });
@@ -251,15 +251,15 @@ export function buildGraphScene(model, layout, options = {}) {
             );
             const labelWidth = textWidth(
                 port.id,
-                5.5,
+                6.4,
                 labelLength
-            ) + 14;
+            ) + 15;
             const labelX = port.direction === "input"
                 ? 5
                 : box.width - labelWidth - 5;
             pushShape(
                 overlayShapes,
-                [labelX, port.y - 7, labelWidth, 14],
+                [labelX, port.y - 8, labelWidth, 16],
                 [0.025, 0.03, 0.025, 0.82],
                 [0.14, 0.16, 0.13, 0.92],
                 [3, 0.75, 0, nodeIndex]
@@ -276,11 +276,11 @@ export function buildGraphScene(model, layout, options = {}) {
             );
             pushText(glyphs, port.id, {
                 x: port.direction === "input" ? 10 : box.width - 10,
-                y: port.y - 4,
+                y: port.y - 5,
                 nodeIndex,
                 color: TEXT.primary,
-                width: 5.5,
-                height: 9,
+                width: 6.4,
+                height: 10.5,
                 maximum: maximumCharacters,
                 align: port.direction === "output" ? "right" : "left"
             });
