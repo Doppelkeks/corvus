@@ -6,6 +6,11 @@ import {
 } from "./graph-camera.js";
 import { GraphWorkerClient } from "./graph-worker-client.js";
 import { normalizeNodeEditorModel } from "./model.js";
+import { connectionForPorts } from "./port-connection.js";
+import {
+    nodesInSelection,
+    selectionRectangle
+} from "./selection-geometry.js";
 import { WebGpuGraphSurface } from "./webgpu-graph-surface.js";
 
 function element(tag, className = "", text = null) {
@@ -65,6 +70,7 @@ export class NodeEditor {
         this.scene = null;
         this.previewStates = new Map();
         this.selectedNodeId = null;
+        this.selectedNodeIds = new Set();
         this.selectedEdgeId = null;
         this.hoveredEdgeId = null;
         this.selectedPort = null;
@@ -80,7 +86,7 @@ export class NodeEditor {
         this.viewport.setAttribute("role", "application");
         this.viewport.setAttribute(
             "aria-label",
-            "Node graph editor. Drag node headers to move. Alt-drag or middle-drag to pan."
+            "Node graph editor. Drag ports to connect. Drag empty space to select. Alt-drag or middle-drag to pan."
         );
         this.canvas = document.createElement("canvas");
         this.canvas.className = "node-editor-gpu-surface";
@@ -121,6 +127,7 @@ export class NodeEditor {
             this.hoveredEdgeId = null;
             this.#syncInteraction();
         };
+        const onContextMenu = (event) => this.#handleContextMenu(event);
         const onKeyDown = (event) => this.#handleKeyDown(event);
         this.viewport.addEventListener("wheel", onWheel, { passive: false });
         this.viewport.addEventListener("pointerdown", onPointerDown);
@@ -128,6 +135,7 @@ export class NodeEditor {
         this.viewport.addEventListener("pointerup", onPointerUp);
         this.viewport.addEventListener("pointercancel", onPointerUp);
         this.viewport.addEventListener("pointerleave", onPointerLeave);
+        this.viewport.addEventListener("contextmenu", onContextMenu);
         this.viewport.addEventListener("keydown", onKeyDown);
         this.cleanup.push(
             () => this.viewport.removeEventListener("wheel", onWheel),
@@ -148,6 +156,10 @@ export class NodeEditor {
                 "pointerleave",
                 onPointerLeave
             ),
+            () => this.viewport.removeEventListener(
+                "contextmenu",
+                onContextMenu
+            ),
             () => this.viewport.removeEventListener("keydown", onKeyDown)
         );
     }
@@ -156,6 +168,7 @@ export class NodeEditor {
         positions = null,
         viewState = null,
         selectedNodeId = this.selectedNodeId,
+        selectedNodeIds = this.selectedNodeIds,
         selectedEdgeId = this.selectedEdgeId,
         selectedPort = this.selectedPort,
         ...callbacks
@@ -165,16 +178,30 @@ export class NodeEditor {
         if (graphChanged) {
             this.positions.clear();
             this.selectedNodeId = null;
+            this.selectedNodeIds.clear();
             this.selectedEdgeId = null;
             this.selectedPort = null;
             this.previewStates.clear();
         }
         this.model = normalized;
         this.callbacks = callbacks;
-        this.selectedNodeId = selectedNodeId;
+        const requestedNodeIds = selectedNodeIds instanceof Set
+            ? [...selectedNodeIds]
+            : Array.isArray(selectedNodeIds)
+                ? selectedNodeIds
+                : [];
+        if (selectedNodeId && requestedNodeIds.length === 0) {
+            requestedNodeIds.push(selectedNodeId);
+        }
+        const liveIds = new Set(normalized.nodes.map((node) => node.id));
+        this.selectedNodeIds = new Set(
+            requestedNodeIds.filter((id) => liveIds.has(id))
+        );
+        this.selectedNodeId = this.selectedNodeIds.has(selectedNodeId)
+            ? selectedNodeId
+            : [...this.selectedNodeIds][0] ?? null;
         this.selectedEdgeId = selectedEdgeId;
         this.selectedPort = selectedPort;
-        const liveIds = new Set(normalized.nodes.map((node) => node.id));
         for (const id of [...this.positions.keys()]) {
             if (!liveIds.has(id)) this.positions.delete(id);
         }
@@ -234,6 +261,21 @@ export class NodeEditor {
         return screenToGraphPoint(this.view, {
             x: event.clientX - rect.left,
             y: event.clientY - rect.top
+        });
+    }
+
+    #requestPoint(event) {
+        const rect = this.canvas.getBoundingClientRect();
+        return Object.freeze({
+            graphPoint: this.#graphPoint(event),
+            viewportPoint: Object.freeze({
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            }),
+            clientPoint: Object.freeze({
+                x: event.clientX,
+                y: event.clientY
+            })
         });
     }
 
@@ -301,6 +343,20 @@ export class NodeEditor {
         );
     }
 
+    #portDescriptor(hit) {
+        return Object.freeze({
+            nodeId: hit.node.id,
+            port: hit.port.id,
+            direction: hit.port.direction,
+            type: hit.port.type
+        });
+    }
+
+    #liveNodes() {
+        if (!this.scene) return [];
+        return this.scene.hitNodes.map((_, index) => this.#liveNode(index));
+    }
+
     #handleWheel(event) {
         event.preventDefault();
         if (event.ctrlKey || event.metaKey) {
@@ -344,31 +400,59 @@ export class NodeEditor {
         const point = this.#graphPoint(event);
         const portHit = this.#portAt(point);
         if (portHit) {
-            this.selectedPort = {
-                nodeId: portHit.node.id,
-                port: portHit.port.id,
-                direction: portHit.port.direction,
-                type: portHit.port.type
-            };
+            const sourcePort = this.#portDescriptor(portHit);
+            this.selectedPort = sourcePort;
             this.selectedNodeId = portHit.node.id;
+            this.selectedNodeIds = new Set([portHit.node.id]);
             this.selectedEdgeId = null;
+            this.drag = {
+                kind: "connection",
+                pointerId,
+                sourcePort,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                point,
+                moved: false
+            };
+            this.viewport.classList.add("connecting-port");
+            this.viewport.setPointerCapture(pointerId);
             this.#syncInteraction();
-            this.callbacks.onSelectPort?.({ ...this.selectedPort });
+            this.#notifyNodeSelection();
             return;
         }
         const node = this.#nodeAt(point);
         if (node) {
-            this.selectNode(node.id);
+            const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+            if (additive) {
+                this.selectNode(node.id, { toggle: true });
+            } else if (this.selectedNodeIds.has(node.id)) {
+                this.selectedNodeId = node.id;
+                this.selectedEdgeId = null;
+                this.selectedPort = null;
+                this.#syncInteraction();
+                this.#notifyNodeSelection();
+            } else {
+                this.selectNode(node.id);
+            }
             if (point.y - node.y <= node.headerHeight) {
+                if (!this.selectedNodeIds.has(node.id)) return;
+                const startingPositions = {};
+                this.selectedNodeIds.forEach((nodeId) => {
+                    const index = this.scene.nodeIndexById[nodeId];
+                    if (!Number.isInteger(index)) return;
+                    const liveNode = this.#liveNode(index);
+                    startingPositions[nodeId] = {
+                        x: liveNode.x,
+                        y: liveNode.y
+                    };
+                });
                 this.drag = {
                     kind: "node",
                     pointerId,
                     nodeId: node.id,
-                    nodeIndex: node.index,
                     clientX: event.clientX,
                     clientY: event.clientY,
-                    x: node.x,
-                    y: node.y
+                    startingPositions
                 };
                 this.viewport.classList.add("dragging-node");
                 this.viewport.setPointerCapture(pointerId);
@@ -380,7 +464,26 @@ export class NodeEditor {
             this.selectEdge(edge.id);
             return;
         }
-        this.clearSelection();
+        const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+        this.drag = {
+            kind: "selection",
+            pointerId,
+            start: point,
+            current: point,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            initialNodeIds: additive ? [...this.selectedNodeIds] : [],
+            moved: false
+        };
+        if (!additive) {
+            this.selectedNodeId = null;
+            this.selectedNodeIds.clear();
+            this.selectedEdgeId = null;
+            this.selectedPort = null;
+        }
+        this.viewport.classList.add("selecting-nodes");
+        this.viewport.setPointerCapture(pointerId);
+        this.#syncInteraction();
     }
 
     #handlePointerMove(event) {
@@ -395,14 +498,48 @@ export class NodeEditor {
                 });
                 return;
             }
-            const position = {
-                x: this.drag.x
-                    + (event.clientX - this.drag.clientX) / this.view.zoom,
-                y: this.drag.y
-                    + (event.clientY - this.drag.clientY) / this.view.zoom
+            if (this.drag.kind === "connection") {
+                const point = this.#graphPoint(event);
+                this.drag.point = point;
+                this.drag.moved ||= Math.hypot(
+                    event.clientX - this.drag.clientX,
+                    event.clientY - this.drag.clientY
+                ) >= 4;
+                this.#syncInteraction();
+                return;
+            }
+            if (this.drag.kind === "selection") {
+                const point = this.#graphPoint(event);
+                this.drag.current = point;
+                this.drag.moved ||= Math.hypot(
+                    event.clientX - this.drag.clientX,
+                    event.clientY - this.drag.clientY
+                ) >= 3;
+                const selected = new Set(this.drag.initialNodeIds);
+                nodesInSelection(
+                    this.#liveNodes(),
+                    this.drag.start,
+                    point
+                ).forEach((id) => selected.add(id));
+                this.selectedNodeIds = selected;
+                this.selectedNodeId = [...selected].at(-1) ?? null;
+                this.#syncInteraction();
+                return;
+            }
+            const delta = {
+                x: (event.clientX - this.drag.clientX) / this.view.zoom,
+                y: (event.clientY - this.drag.clientY) / this.view.zoom
             };
-            this.positions.set(this.drag.nodeId, position);
-            this.surface.setNodePosition(this.drag.nodeId, position);
+            Object.entries(this.drag.startingPositions).forEach(
+                ([nodeId, start]) => {
+                    const position = {
+                        x: start.x + delta.x,
+                        y: start.y + delta.y
+                    };
+                    this.positions.set(nodeId, position);
+                    this.surface.setNodePosition(nodeId, position);
+                }
+            );
             return;
         }
         const point = this.#graphPoint(event);
@@ -428,12 +565,73 @@ export class NodeEditor {
         }
         const drag = this.drag;
         this.drag = null;
-        this.viewport.classList.remove("panning", "dragging-node");
-        if (drag.kind !== "node") return;
-        const position = this.positions.get(drag.nodeId);
-        this.callbacks.onMoveNode?.(drag.nodeId, { ...position });
-        this.callbacks.onPositionsChange?.(this.getPositions());
-        this.prepared = this.#prepareScene();
+        this.viewport.classList.remove(
+            "panning",
+            "dragging-node",
+            "connecting-port",
+            "selecting-nodes"
+        );
+        if (drag.kind === "node") {
+            const moved = Object.fromEntries(
+                Object.keys(drag.startingPositions).map((nodeId) => [
+                    nodeId,
+                    { ...this.positions.get(nodeId) }
+                ])
+            );
+            if (this.callbacks.onMoveNodes) {
+                this.callbacks.onMoveNodes(moved);
+            } else {
+                Object.entries(moved).forEach(([nodeId, position]) =>
+                    this.callbacks.onMoveNode?.(nodeId, position));
+            }
+            this.callbacks.onPositionsChange?.(this.getPositions());
+            this.prepared = this.#prepareScene();
+            return;
+        }
+        if (drag.kind === "connection") {
+            const point = this.#graphPoint(event);
+            const targetHit = this.#portAt(point);
+            const targetPort = targetHit
+                ? this.#portDescriptor(targetHit)
+                : null;
+            const connection = connectionForPorts(
+                drag.sourcePort,
+                targetPort
+            );
+            this.selectedPort = drag.moved ? null : drag.sourcePort;
+            this.#syncInteraction();
+            if (drag.moved && connection) {
+                this.callbacks.onConnectPorts?.(connection);
+            } else if (drag.moved && !targetHit) {
+                this.callbacks.onRequestNode?.({
+                    ...this.#requestPoint(event),
+                    sourcePort: drag.sourcePort
+                });
+            } else if (!drag.moved) {
+                this.callbacks.onSelectPort?.({ ...drag.sourcePort });
+            }
+            return;
+        }
+        if (drag.kind === "selection") {
+            this.#syncInteraction();
+            this.#notifyNodeSelection();
+        }
+    }
+
+    #handleContextMenu(event) {
+        const point = this.#graphPoint(event);
+        event.preventDefault();
+        if (
+            this.#portAt(point)
+            || this.#nodeAt(point)
+            || this.#edgeAt(point)
+        ) {
+            return;
+        }
+        this.callbacks.onRequestNode?.({
+            ...this.#requestPoint(event),
+            sourcePort: null
+        });
     }
 
     #handleKeyDown(event) {
@@ -452,16 +650,33 @@ export class NodeEditor {
             }
         } else if (this.selectedNodeId) {
             event.preventDefault();
-            this.callbacks.onDeleteNode?.(this.selectedNodeId);
+            const nodeIds = [...this.selectedNodeIds];
+            if (nodeIds.length > 1 && this.callbacks.onDeleteNodes) {
+                this.callbacks.onDeleteNodes(nodeIds);
+            } else {
+                nodeIds.forEach((nodeId) =>
+                    this.callbacks.onDeleteNode?.(nodeId));
+            }
         }
     }
 
     #syncInteraction() {
         this.surface.setInteraction({
             selectedNodeId: this.selectedNodeId,
+            selectedNodeIds: [...this.selectedNodeIds],
             selectedEdgeId: this.selectedEdgeId,
             hoveredEdgeId: this.hoveredEdgeId,
-            selectedPort: this.selectedPort
+            selectedPort: this.selectedPort,
+            connectionPreview: this.drag?.kind === "connection"
+                ? {
+                    sourcePort: this.drag.sourcePort,
+                    point: this.drag.point
+                }
+                : null,
+            selectionRect: this.drag?.kind === "selection"
+                && this.drag.moved
+                ? selectionRectangle(this.drag.start, this.drag.current)
+                : null
         });
         const edge = this.model?.edges.find(
             (entry) => entry.id === this.selectedEdgeId
@@ -475,6 +690,9 @@ export class NodeEditor {
             );
             this.selectionStatus.textContent =
                 `${source?.label ?? "Node"} → ${target?.label ?? "Node"} selected · Delete removes connection`;
+        } else if (this.selectedNodeIds.size > 1) {
+            this.selectionStatus.textContent =
+                `${this.selectedNodeIds.size} nodes selected`;
         } else if (this.selectedNodeId) {
             const node = this.model?.nodes.find(
                 (entry) => entry.id === this.selectedNodeId
@@ -484,13 +702,37 @@ export class NodeEditor {
         }
     }
 
-    selectNode(nodeId) {
+    #notifyNodeSelection() {
+        const nodeIds = [...this.selectedNodeIds];
+        if (nodeIds.length === 0) {
+            this.callbacks.onClearSelection?.();
+        } else if (this.callbacks.onSelectNodes) {
+            this.callbacks.onSelectNodes(nodeIds, {
+                primaryNodeId: this.selectedNodeId
+            });
+        } else {
+            this.callbacks.onSelectNode?.(this.selectedNodeId);
+        }
+    }
+
+    selectNode(nodeId, { toggle = false } = {}) {
         if (!this.model?.nodes.some((node) => node.id === nodeId)) return;
-        this.selectedNodeId = nodeId;
+        if (toggle) {
+            if (this.selectedNodeIds.has(nodeId)) {
+                this.selectedNodeIds.delete(nodeId);
+            } else {
+                this.selectedNodeIds.add(nodeId);
+            }
+        } else {
+            this.selectedNodeIds = new Set([nodeId]);
+        }
+        this.selectedNodeId = this.selectedNodeIds.has(nodeId)
+            ? nodeId
+            : [...this.selectedNodeIds].at(-1) ?? null;
         this.selectedEdgeId = null;
         this.selectedPort = null;
         this.#syncInteraction();
-        this.callbacks.onSelectNode?.(nodeId);
+        this.#notifyNodeSelection();
     }
 
     selectEdge(edgeId) {
@@ -498,6 +740,7 @@ export class NodeEditor {
         if (!edge) return;
         this.selectedEdgeId = edgeId;
         this.selectedNodeId = null;
+        this.selectedNodeIds.clear();
         this.selectedPort = null;
         this.#syncInteraction();
         this.callbacks.onSelectEdge?.(edgeId, edge);
@@ -506,12 +749,14 @@ export class NodeEditor {
     clearSelection() {
         if (
             !this.selectedNodeId
+            && this.selectedNodeIds.size === 0
             && !this.selectedEdgeId
             && !this.selectedPort
         ) {
             return;
         }
         this.selectedNodeId = null;
+        this.selectedNodeIds.clear();
         this.selectedEdgeId = null;
         this.selectedPort = null;
         this.#syncInteraction();

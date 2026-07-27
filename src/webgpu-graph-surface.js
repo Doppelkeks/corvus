@@ -4,6 +4,7 @@ import {
     EDGE_RENDER_SHADER,
     GLYPH_SHADER,
     GRID_SHADER,
+    INTERACTION_OVERLAY_SHADER,
     PREVIEW_SHADER,
     SHAPE_COMPUTE_SHADER,
     SHAPE_RENDER_SHADER
@@ -42,6 +43,13 @@ function renderTarget(format, blend = undefined) {
     return [{ format, blend }];
 }
 
+function edgeTypeIndex(type) {
+    return type === "grayscale" ? 0
+        : type === "color" ? 1
+            : type === "bundle" ? 2
+                : 3;
+}
+
 export class WebGpuGraphSurface {
     constructor(canvas, {
         device = null,
@@ -59,10 +67,14 @@ export class WebGpuGraphSurface {
         this.view = { zoom: 1, scrollLeft: 0, scrollTop: 0 };
         this.interaction = {
             selectedNodeId: null,
+            selectedNodeIds: [],
             selectedEdgeId: null,
             hoveredEdgeId: null,
-            selectedPort: null
+            selectedPort: null,
+            connectionPreview: null,
+            selectionRect: null
         };
+        this.dynamicEdgeVisible = false;
         this.previewTextures = new Map();
         this.previewBindGroups = new WeakMap();
         this.sceneBuffers = [];
@@ -103,6 +115,11 @@ export class WebGpuGraphSurface {
         this.cameraBuffer = device.createBuffer({
             label: "Node editor camera",
             size: CAMERA_FLOATS * Float32Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
+        this.overlayBuffer = device.createBuffer({
+            label: "Node editor interaction overlay",
+            size: 4 * Float32Array.BYTES_PER_ELEMENT,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.previewSampler = device.createSampler({
@@ -158,6 +175,11 @@ export class WebGpuGraphSurface {
             device,
             "Node editor previews",
             PREVIEW_SHADER
+        );
+        const interactionOverlayModule = shader(
+            device,
+            "Node editor interaction overlay",
+            INTERACTION_OVERLAY_SHADER
         );
         this.gridPipeline = device.createRenderPipeline({
             label: "Node editor grid pipeline",
@@ -251,10 +273,32 @@ export class WebGpuGraphSurface {
             },
             primitive: { topology: "triangle-list" }
         });
+        this.interactionOverlayPipeline = device.createRenderPipeline({
+            label: "Node editor interaction overlay pipeline",
+            layout: "auto",
+            vertex: {
+                module: interactionOverlayModule,
+                entryPoint: "vertexMain"
+            },
+            fragment: {
+                module: interactionOverlayModule,
+                entryPoint: "fragmentMain",
+                targets: renderTarget(this.format, ALPHA_BLEND)
+            },
+            primitive: { topology: "triangle-list" }
+        });
         this.gridBindGroup = device.createBindGroup({
             label: "Node editor grid bindings",
             layout: this.gridPipeline.getBindGroupLayout(0),
             entries: [{ binding: 0, resource: { buffer: this.cameraBuffer } }]
+        });
+        this.interactionOverlayBindGroup = device.createBindGroup({
+            label: "Node editor interaction overlay bindings",
+            layout: this.interactionOverlayPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: this.cameraBuffer } },
+                { binding: 1, resource: { buffer: this.overlayBuffer } }
+            ]
         });
     }
 
@@ -262,11 +306,27 @@ export class WebGpuGraphSurface {
         if (!this.device) throw new Error("Graph surface is not initialized");
         this.#destroySceneBuffers();
         this.scene = scene;
+        this.staticEdgeCount = scene.edges.length / 12;
+        this.dynamicEdgeVisible = false;
         const storage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
+        const gpuNodeRecords = new Float32Array(
+            scene.nodeRecords.length + 4
+        );
+        gpuNodeRecords.set(scene.nodeRecords);
         this.nodeBuffer = createBuffer(
             this.device,
             "Node editor nodes",
-            scene.nodeRecords,
+            gpuNodeRecords,
+            storage
+        );
+        this.nodeSelection = new Uint32Array(Math.max(
+            4,
+            scene.nodeRecords.length / 4
+        ));
+        this.nodeSelectionBuffer = createBuffer(
+            this.device,
+            "Node editor selection flags",
+            this.nodeSelection,
             storage
         );
         this.shapeInputBuffer = createBuffer(
@@ -281,15 +341,17 @@ export class WebGpuGraphSurface {
             scene.shapes,
             storage
         );
+        this.gpuEdgeRecords = new Float32Array(scene.edges.length + 12);
+        this.gpuEdgeRecords.set(scene.edges);
         this.edgeBuffer = createBuffer(
             this.device,
             "Node editor edge input",
-            scene.edges,
+            this.gpuEdgeRecords,
             storage
         );
         const edgeVertexSize = Math.max(
             16,
-            (scene.edges.length / 12)
+            (this.staticEdgeCount + 1)
                 * EDGE_SEGMENTS
                 * EDGE_VERTICES_PER_SEGMENT
                 * EDGE_VERTEX_BYTES
@@ -313,6 +375,7 @@ export class WebGpuGraphSurface {
         );
         this.sceneBuffers = [
             this.nodeBuffer,
+            this.nodeSelectionBuffer,
             this.shapeInputBuffer,
             this.shapeOutputBuffer,
             this.edgeBuffer,
@@ -321,6 +384,8 @@ export class WebGpuGraphSurface {
             this.previewBuffer
         ];
         this.#createSceneBindGroups();
+        this.#writeNodeSelection();
+        this.#writeConnectionPreview();
         this.render();
     }
 
@@ -333,7 +398,8 @@ export class WebGpuGraphSurface {
                 { binding: 0, resource: { buffer: this.cameraBuffer } },
                 { binding: 1, resource: { buffer: this.nodeBuffer } },
                 { binding: 2, resource: { buffer: this.shapeInputBuffer } },
-                { binding: 3, resource: { buffer: this.shapeOutputBuffer } }
+                { binding: 3, resource: { buffer: this.shapeOutputBuffer } },
+                { binding: 4, resource: { buffer: this.nodeSelectionBuffer } }
             ]
         });
         this.shapeBindGroup = device.createBindGroup({
@@ -389,7 +455,80 @@ export class WebGpuGraphSurface {
 
     setInteraction(interaction) {
         this.interaction = { ...this.interaction, ...interaction };
+        this.#writeNodeSelection();
+        this.#writeConnectionPreview();
         this.render();
+    }
+
+    #writeNodeSelection() {
+        if (!this.scene || !this.nodeSelectionBuffer) return;
+        this.nodeSelection.fill(0);
+        const ids = this.interaction.selectedNodeIds?.length
+            ? this.interaction.selectedNodeIds
+            : [this.interaction.selectedNodeId].filter(Boolean);
+        ids.forEach((id) => {
+            const index = this.scene.nodeIndexById[id];
+            if (Number.isInteger(index)) this.nodeSelection[index] = 1;
+        });
+        this.device.queue.writeBuffer(
+            this.nodeSelectionBuffer,
+            0,
+            this.nodeSelection
+        );
+    }
+
+    #writeConnectionPreview() {
+        if (!this.scene || !this.edgeBuffer || !this.nodeBuffer) return;
+        const preview = this.interaction.connectionPreview;
+        const source = preview?.sourcePort;
+        const nodeIndex = source
+            ? this.scene.nodeIndexById[source.nodeId]
+            : null;
+        const node = Number.isInteger(nodeIndex)
+            ? this.scene.hitNodes[nodeIndex]
+            : null;
+        const port = node?.ports.find((entry) =>
+            entry.id === source.port
+            && entry.direction === source.direction);
+        if (!preview?.point || !node || !port) {
+            this.dynamicEdgeVisible = false;
+            return;
+        }
+        const virtualNodeIndex = this.scene.nodeRecords.length / 4;
+        const virtualNode = new Float32Array([
+            preview.point.x,
+            preview.point.y,
+            0,
+            0
+        ]);
+        this.device.queue.writeBuffer(
+            this.nodeBuffer,
+            virtualNodeIndex * 4 * Float32Array.BYTES_PER_ELEMENT,
+            virtualNode
+        );
+        const outputFirst = source.direction === "output";
+        const record = new Float32Array([
+            outputFirst ? nodeIndex : virtualNodeIndex,
+            outputFirst ? virtualNodeIndex : nodeIndex,
+            outputFirst ? port.x : 0,
+            outputFirst ? port.y : 0,
+            outputFirst ? 0 : port.x,
+            outputFirst ? 0 : port.y,
+            edgeTypeIndex(source.type),
+            this.staticEdgeCount,
+            source.type === "bundle" ? 2.4 : 1.7,
+            0,
+            0,
+            0
+        ]);
+        this.device.queue.writeBuffer(
+            this.edgeBuffer,
+            this.staticEdgeCount
+                * 12
+                * Float32Array.BYTES_PER_ELEMENT,
+            record
+        );
+        this.dynamicEdgeVisible = true;
     }
 
     setNodePosition(nodeId, position) {
@@ -462,7 +601,7 @@ export class WebGpuGraphSurface {
             hoveredEdge,
             this.scene.nodeRecords.length / 4,
             this.scene.shapes.length / 16,
-            this.scene.edges.length / 12,
+            this.staticEdgeCount + (this.dynamicEdgeVisible ? 1 : 0),
             this.scene.glyphs.length / 16,
             globalThis.devicePixelRatio || 1,
             selectedPortShape,
@@ -482,7 +621,8 @@ export class WebGpuGraphSurface {
             label: "Node editor frame"
         });
         const shapeCount = this.scene.shapes.length / 16;
-        const edgeCount = this.scene.edges.length / 12;
+        const edgeCount = this.staticEdgeCount
+            + (this.dynamicEdgeVisible ? 1 : 0);
         if (shapeCount > 0) {
             const pass = encoder.beginComputePass({
                 label: "Node editor shape transform and cull"
@@ -549,6 +689,22 @@ export class WebGpuGraphSurface {
             pass.setBindGroup(0, this.glyphBindGroup);
             pass.draw(6, glyphCount);
         }
+        const selectionRect = this.interaction.selectionRect;
+        if (selectionRect) {
+            this.device.queue.writeBuffer(
+                this.overlayBuffer,
+                0,
+                new Float32Array([
+                    selectionRect.left,
+                    selectionRect.top,
+                    selectionRect.right - selectionRect.left,
+                    selectionRect.bottom - selectionRect.top
+                ])
+            );
+            pass.setPipeline(this.interactionOverlayPipeline);
+            pass.setBindGroup(0, this.interactionOverlayBindGroup);
+            pass.draw(6);
+        }
         pass.end();
         this.device.queue.submit([encoder.finish()]);
     }
@@ -602,6 +758,7 @@ export class WebGpuGraphSurface {
         this.resizeObserver.disconnect();
         this.#destroySceneBuffers();
         this.cameraBuffer?.destroy();
+        this.overlayBuffer?.destroy();
         this.fontAtlas?.destroy();
         if (this.deviceErrorHandler) {
             this.device?.removeEventListener(

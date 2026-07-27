@@ -42,6 +42,16 @@ describe("GPU-only graph surface architecture", () => {
         expect(worker).toContain("transferableScene");
     });
 
+    it("renders connection drags and multi-selection feedback on the GPU", () => {
+        const surface = source("./webgpu-graph-surface.js");
+        const shaders = source("./gpu-graph-shaders.js");
+        expect(surface).toContain("dynamicEdgeVisible");
+        expect(surface).toContain("interactionOverlayPipeline");
+        expect(surface).toContain("nodeSelectionBuffer");
+        expect(shaders).toContain("INTERACTION_OVERLAY_SHADER");
+        expect(shaders).toContain("nodeSelection[nodeIndex]");
+    });
+
     it("uses antialiased GPU text and renders a quiet line grid", () => {
         const fontAtlas = source("./gpu-font-atlas.js");
         const strokeFont = source("./stroke-font.js");

@@ -67,6 +67,7 @@ struct Camera {
 @group(0) @binding(1) var<storage, read> nodes: array<vec4f>;
 @group(0) @binding(2) var<storage, read> inputShapes: array<vec4f>;
 @group(0) @binding(3) var<storage, read_write> outputShapes: array<vec4f>;
+@group(0) @binding(4) var<storage, read> nodeSelection: array<u32>;
 
 @compute @workgroup_size(64)
 fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
@@ -93,7 +94,7 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
         nextFill.a = 0.0;
         border.a = 0.0;
     } else if (
-        (shapeInfo.z == 1.0 && f32(nodeIndex) == camera.state.y)
+        (shapeInfo.z == 1.0 && nodeSelection[nodeIndex] != 0u)
         || f32(index) == camera.display.y
     ) {
         border = vec4f(0.72, 0.95, 0.42, 1.0);
@@ -102,6 +103,60 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
     outputShapes[base + 1u] = nextFill;
     outputShapes[base + 2u] = border;
     outputShapes[base + 3u] = shapeInfo;
+}
+`;
+
+export const INTERACTION_OVERLAY_SHADER = /* wgsl */`
+struct Camera {
+    view: vec4f,
+    state: vec4f,
+    counts: vec4f,
+    display: vec4f,
+}
+struct Overlay {
+    rectangle: vec4f,
+}
+@group(0) @binding(0) var<uniform> camera: Camera;
+@group(0) @binding(1) var<uniform> overlay: Overlay;
+
+struct VertexOutput {
+    @builtin(position) position: vec4f,
+    @location(0) uv: vec2f,
+    @location(1) size: vec2f,
+}
+
+@vertex
+fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+    let corners = array<vec2f, 6>(
+        vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(0.0, 1.0),
+        vec2f(0.0, 1.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0)
+    );
+    let corner = corners[vertexIndex];
+    let graphPosition = overlay.rectangle.xy
+        + overlay.rectangle.zw * corner;
+    let screen = (graphPosition - camera.view.zw) * camera.state.x;
+    var output: VertexOutput;
+    output.position = vec4f(
+        screen.x / camera.view.x * 2.0 - 1.0,
+        1.0 - screen.y / camera.view.y * 2.0,
+        0.0,
+        1.0
+    );
+    output.uv = corner;
+    output.size = overlay.rectangle.zw * camera.state.x;
+    return output;
+}
+
+@fragment
+fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+    let edgeDistance = min(
+        min(input.uv.x, 1.0 - input.uv.x) * input.size.x,
+        min(input.uv.y, 1.0 - input.uv.y) * input.size.y
+    );
+    let border = 1.0 - smoothstep(1.0, 2.25, edgeDistance);
+    let fill = 0.105;
+    let alpha = max(fill, border * 0.82);
+    return vec4f(0.72, 0.95, 0.42, alpha);
 }
 `;
 

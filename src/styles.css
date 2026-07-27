@@ -266,6 +266,16 @@
     user-select: none;
 }
 
+.node-editor-viewport.connecting-port {
+    cursor: crosshair;
+    user-select: none;
+}
+
+.node-editor-viewport.selecting-nodes {
+    cursor: crosshair;
+    user-select: none;
+}
+
 .node-editor-viewport.edge-hovered {
     cursor: pointer;
 }

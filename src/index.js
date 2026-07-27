@@ -20,6 +20,15 @@ export {
     hitTestEdges,
     sampleCubicEdge
 } from "./edge-geometry.js";
+export {
+    nodeIntersectsSelection,
+    nodesInSelection,
+    selectionRectangle
+} from "./selection-geometry.js";
+export {
+    connectionForPorts,
+    portsCanConnect
+} from "./port-connection.js";
 export { WebGpuGraphSurface } from "./webgpu-graph-surface.js";
 export { buildGraphScene, GRAPH_SCENE_METRICS, GRAPH_SCENE_STRIDES }
     from "./graph-scene.js";
