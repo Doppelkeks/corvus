@@ -20,6 +20,17 @@ const GLYPH_ADVANCES = Object.freeze([
     34, 34, 21, 24, 20, 33, 28, 42, 28, 28, 26, 19, 16, 19, 39
 ]);
 
+// The atlas centers each glyph inside a fixed-size cell. These source-pixel
+// offsets restore the font's natural pen origin when the cell quad is drawn.
+const GLYPH_ORIGIN_OFFSETS_X = Object.freeze([
+    0, -27, -24, -16, -20, -10, -15, -30, -26, -23, -22, -18, -26, -24, -28, -21,
+    -18, -22, -19, -19, -17, -20, -19, -19, -18, -18, -28, -26, -19, -18, -19, -22,
+    -9, -14, -20, -16, -17, -22, -23, -14, -16, -29, -22, -20, -23, -11, -15, -13,
+    -20, -13, -19, -20, -17, -16, -14, -6, -15, -16, -16, -28, -21, -24, -18, -20,
+    -27, -19, -19, -21, -17, -19, -23, -17, -19, -27, -24, -21, -28, -11, -19, -17,
+    -19, -17, -25, -22, -23, -18, -18, -12, -19, -18, -20, -24, -29, -24, -18
+]);
+
 function codepointIndex(character) {
     const codepoint = String(character || "?").codePointAt(0);
     const safeCodepoint = Math.max(
@@ -41,12 +52,17 @@ export function gpuGlyphAdvance(character, height) {
         / GPU_FONT_LAYOUT.cellHeight;
 }
 
+export function gpuGlyphOffsetX(character, height) {
+    return GLYPH_ORIGIN_OFFSETS_X[codepointIndex(character)]
+        * height
+        / GPU_FONT_LAYOUT.cellHeight;
+}
+
 export function gpuTextWidth(value, height, maximum = 28) {
     const characters = [...String(value ?? "").slice(0, maximum)];
-    if (characters.length === 0) return 0;
-    return characters.slice(0, -1).reduce(
+    return characters.reduce(
         (total, character) =>
             total + gpuGlyphAdvance(character, height),
-        gpuGlyphQuadWidth(height)
+        0
     );
 }

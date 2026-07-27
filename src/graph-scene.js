@@ -1,6 +1,7 @@
 import { sampleCubicEdge } from "./edge-geometry.js";
 import {
     gpuGlyphAdvance,
+    gpuGlyphOffsetX,
     gpuGlyphQuadWidth,
     gpuTextWidth
 } from "./gpu-font-layout.js";
@@ -83,7 +84,7 @@ function pushText(
     let cursorX = startX;
     text.forEach((character) => {
         target.push(
-            cursorX,
+            cursorX + gpuGlyphOffsetX(character, height),
             y,
             width,
             height,

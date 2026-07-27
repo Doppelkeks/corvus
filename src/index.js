@@ -28,6 +28,7 @@ export {
 export {
     GPU_FONT_LAYOUT,
     gpuGlyphAdvance,
+    gpuGlyphOffsetX,
     gpuGlyphQuadWidth,
     gpuTextWidth
 } from "./gpu-font-layout.js";

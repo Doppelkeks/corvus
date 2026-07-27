@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     GPU_FONT_LAYOUT,
     gpuGlyphAdvance,
+    gpuGlyphOffsetX,
     gpuGlyphQuadWidth,
     gpuTextWidth
 } from "./gpu-font-layout.js";
@@ -22,12 +23,18 @@ describe("GPU font layout", () => {
             .toBeLessThan(gpuGlyphAdvance("W", 16));
     });
 
+    it("restores centered atlas glyphs to the natural pen origin", () => {
+        expect(gpuGlyphOffsetX("f", 16)).toBeCloseTo(-4.6);
+        expect(gpuGlyphOffsetX("B", 16)).toBeCloseTo(-4);
+        expect(gpuGlyphOffsetX(" ", 16)).toBe(0);
+    });
+
     it("measures mixed labels using per-character advances", () => {
         expect(gpuTextWidth("Wide", 16)).toBeCloseTo(
             gpuGlyphAdvance("W", 16)
             + gpuGlyphAdvance("i", 16)
             + gpuGlyphAdvance("d", 16)
-            + gpuGlyphQuadWidth(16)
+            + gpuGlyphAdvance("e", 16)
         );
     });
 });
