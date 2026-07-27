@@ -1,10 +1,13 @@
 import {
+    cubicControls,
     hitTestEdges,
     sampleCubicEdge
 } from "./edge-geometry.js";
 import { layoutNodeEditorModel } from "./layout.js";
 import { normalizeNodeEditorModel } from "./model.js";
 import { WebGpuEdgeLayer } from "./webgpu-edge-layer.js";
+
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 function element(tag, className = "", text = null) {
     const node = document.createElement(tag);
@@ -101,6 +104,8 @@ export class NodeEditor {
         this.scene = element("div", "node-editor-scene");
         this.wireCanvas = document.createElement("canvas");
         this.wireCanvas.className = "node-editor-wire-surface";
+        this.edgeHitLayer = document.createElementNS(SVG_NAMESPACE, "svg");
+        this.edgeHitLayer.classList.add("node-editor-edge-hit-layer");
         this.nodeLayer = element("div", "node-editor-node-layer");
         this.edgeControls = element("div", "node-editor-a11y-edges");
         this.selectionStatus = element(
@@ -109,9 +114,14 @@ export class NodeEditor {
             "WebGPU graph surface"
         );
         this.selectionStatus.setAttribute("aria-live", "polite");
-        this.scene.append(this.wireCanvas, this.nodeLayer);
+        this.scene.append(
+            this.wireCanvas,
+            this.edgeHitLayer,
+            this.edgeControls,
+            this.nodeLayer
+        );
         this.canvas.append(this.scene);
-        this.viewport.append(this.canvas, this.edgeControls, this.selectionStatus);
+        this.viewport.append(this.canvas, this.selectionStatus);
         container.replaceChildren(this.viewport);
 
         this.edgeLayer = new WebGpuEdgeLayer(this.wireCanvas, {
@@ -237,7 +247,6 @@ export class NodeEditor {
             scrollTop: Math.max(0, Number(viewState.scrollTop) || 0)
         };
         this.#renderNodes();
-        this.#renderAccessibleEdges();
         this.#sizeScene();
         this.#calculateEdges();
         this.#syncSelection();
@@ -279,6 +288,12 @@ export class NodeEditor {
             width: `${this.sceneWidth}px`,
             height: `${this.sceneHeight}px`
         });
+        this.edgeHitLayer.setAttribute(
+            "viewBox",
+            `0 0 ${this.sceneWidth} ${this.sceneHeight}`
+        );
+        this.edgeHitLayer.setAttribute("width", String(this.sceneWidth));
+        this.edgeHitLayer.setAttribute("height", String(this.sceneHeight));
         this.#applyView();
     }
 
@@ -432,25 +447,79 @@ export class NodeEditor {
             const target = this.layoutById.get(edge.to.nodeId);
             const sourceNode = this.nodeById.get(edge.from.nodeId);
             const targetNode = this.nodeById.get(edge.to.nodeId);
+            const from = this.#portAnchor(
+                source,
+                sourceNode,
+                edge.from.port,
+                "output"
+            );
+            const to = this.#portAnchor(
+                target,
+                targetNode,
+                edge.to.port,
+                "input"
+            );
             return Object.freeze({
                 ...edge,
-                points: sampleCubicEdge(
-                    this.#portAnchor(
-                        source,
-                        sourceNode,
-                        edge.from.port,
-                        "output"
-                    ),
-                    this.#portAnchor(
-                        target,
-                        targetNode,
-                        edge.to.port,
-                        "input"
-                    )
-                )
+                fromAnchor: Object.freeze(from),
+                toAnchor: Object.freeze(to),
+                points: sampleCubicEdge(from, to)
             });
         });
+        this.#renderEdgeHitTargets();
+        this.#renderAccessibleEdges();
         this.#scheduleEdges();
+    }
+
+    #renderEdgeHitTargets() {
+        const fragment = document.createDocumentFragment();
+        this.edgeGeometry.forEach((edge) => {
+            const controls = cubicControls(edge.fromAnchor, edge.toAnchor);
+            const path = document.createElementNS(SVG_NAMESPACE, "path");
+            path.setAttribute("class", "node-editor-edge-hit");
+            path.setAttribute("role", "button");
+            path.setAttribute("stroke", "#ffffff");
+            path.setAttribute("stroke-opacity", "0.01");
+            path.setAttribute("fill", "none");
+            path.setAttribute("pointer-events", "stroke");
+            path.setAttribute(
+                "d",
+                `M ${edge.fromAnchor.x} ${edge.fromAnchor.y} `
+                + `C ${controls.first.x} ${controls.first.y}, `
+                + `${controls.second.x} ${controls.second.y}, `
+                + `${edge.toAnchor.x} ${edge.toAnchor.y}`
+            );
+            path.setAttribute("tabindex", "0");
+            const source = this.nodeById.get(edge.from.nodeId);
+            const target = this.nodeById.get(edge.to.nodeId);
+            path.setAttribute(
+                "aria-label",
+                `${source.label}.${edge.from.port} to ${target.label}.${edge.to.port}`
+            );
+            path.addEventListener("pointerdown", (event) => {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                event.stopPropagation();
+                this.selectEdge(edge.id);
+            });
+            path.addEventListener("pointerenter", () => {
+                this.hoveredEdgeId = edge.id;
+                this.#scheduleEdges();
+            });
+            path.addEventListener("pointerleave", () => {
+                if (this.hoveredEdgeId === edge.id) {
+                    this.hoveredEdgeId = null;
+                    this.#scheduleEdges();
+                }
+            });
+            path.addEventListener("keydown", (event) => {
+                if (!["Enter", " "].includes(event.key)) return;
+                event.preventDefault();
+                this.selectEdge(edge.id);
+            });
+            fragment.append(path);
+        });
+        this.edgeHitLayer.replaceChildren(fragment);
     }
 
     #scheduleEdges() {
@@ -468,16 +537,30 @@ export class NodeEditor {
 
     #renderAccessibleEdges() {
         const fragment = document.createDocumentFragment();
-        this.model.edges.forEach((edge) => {
+        this.edgeGeometry.forEach((edge) => {
             const source = this.nodeById.get(edge.from.nodeId);
             const target = this.nodeById.get(edge.to.nodeId);
             const button = element(
                 "button",
-                "",
+                "node-editor-edge-target",
                 `${source.label}.${edge.from.port} to ${target.label}.${edge.to.port}`
             );
             button.type = "button";
+            button.title = `${source.label}.${edge.from.port} → ${target.label}.${edge.to.port}`;
+            const midpoint = edge.points[Math.floor(edge.points.length / 2)];
+            button.style.transform =
+                `translate(${midpoint.x - 8}px, ${midpoint.y - 8}px)`;
             button.addEventListener("click", () => this.selectEdge(edge.id));
+            button.addEventListener("pointerenter", () => {
+                this.hoveredEdgeId = edge.id;
+                this.#scheduleEdges();
+            });
+            button.addEventListener("pointerleave", () => {
+                if (this.hoveredEdgeId === edge.id) {
+                    this.hoveredEdgeId = null;
+                    this.#scheduleEdges();
+                }
+            });
             fragment.append(button);
         });
         this.edgeControls.replaceChildren(fragment);
@@ -497,6 +580,7 @@ export class NodeEditor {
             this.canvas,
             this.scene,
             this.wireCanvas,
+            this.edgeHitLayer,
             this.nodeLayer
         ].includes(target);
     }

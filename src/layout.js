@@ -32,6 +32,12 @@ export function layoutNodeEditorModel(model, {
     ...overrides
 } = {}) {
     const settings = { ...DEFAULT_LAYOUT, ...overrides };
+    const paddingX = Number.isFinite(settings.paddingX)
+        ? settings.paddingX
+        : settings.padding;
+    const paddingY = Number.isFinite(settings.paddingY)
+        ? settings.paddingY
+        : settings.padding;
     const incoming = new Map(model.nodes.map((node) => [node.id, []]));
     for (const edge of model.edges) {
         incoming.get(edge.to.nodeId)?.push(edge.from.nodeId);
@@ -61,13 +67,13 @@ export function layoutNodeEditorModel(model, {
 
     const automaticById = new Map();
     for (const [depth, column] of [...columns.entries()].sort((a, b) => a[0] - b[0])) {
-        let y = settings.padding;
+        let y = paddingY;
         column.sort((left, right) =>
             left.order - right.order || left.id.localeCompare(right.id));
         for (const node of column) {
             const height = nodeHeight(node, settings);
             automaticById.set(node.id, {
-                x: settings.padding + depth * (
+                x: paddingX + depth * (
                     settings.nodeWidth + settings.columnGap
                 ),
                 y,
@@ -79,8 +85,8 @@ export function layoutNodeEditorModel(model, {
         }
     }
 
-    let maximumX = settings.padding;
-    let maximumY = settings.padding;
+    let maximumX = paddingX;
+    let maximumY = paddingY;
     const nodes = model.nodes.map((node) => {
         const automatic = automaticById.get(node.id);
         const manual = positions[node.id];
@@ -92,8 +98,8 @@ export function layoutNodeEditorModel(model, {
             width: automatic.width,
             height: automatic.height
         });
-        maximumX = Math.max(maximumX, entry.x + entry.width + settings.padding);
-        maximumY = Math.max(maximumY, entry.y + entry.height + settings.padding);
+        maximumX = Math.max(maximumX, entry.x + entry.width + paddingX);
+        maximumY = Math.max(maximumY, entry.y + entry.height + paddingY);
         return entry;
     });
 

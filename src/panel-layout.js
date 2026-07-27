@@ -63,6 +63,9 @@ export class PanelLayoutController {
         }
         element.classList.add("node-workspace-panel");
         element.dataset.panelId = id;
+        handle.tabIndex = 0;
+        handle.setAttribute("aria-label", `${id} panel. Drag or use arrow keys to move.`);
+        handle.title = "Drag panel · Arrow keys move · Shift + arrows resize";
         const resizeHandle = document.createElement("button");
         resizeHandle.type = "button";
         resizeHandle.className = "node-workspace-resize-handle";
@@ -97,12 +100,45 @@ export class PanelLayoutController {
         const beginMove = (event) => this.#beginPointerDrag(event, entry, "move");
         const beginResize = (event) => this.#beginPointerDrag(event, entry, "resize");
         const focus = () => this.bringToFront(id);
+        const reset = () => this.reset(id);
+        const keydown = (event) => {
+            const directions = {
+                ArrowLeft: [-16, 0],
+                ArrowRight: [16, 0],
+                ArrowUp: [0, -16],
+                ArrowDown: [0, 16]
+            };
+            if (event.key === "Home") {
+                event.preventDefault();
+                this.reset(id);
+                return;
+            }
+            const direction = directions[event.key];
+            if (!direction) return;
+            event.preventDefault();
+            const current = this.rect(id);
+            const next = event.shiftKey
+                ? {
+                    ...current,
+                    width: current.width + direction[0],
+                    height: current.height + direction[1]
+                }
+                : {
+                    ...current,
+                    x: current.x + direction[0],
+                    y: current.y + direction[1]
+                };
+            this.setRect(id, next);
+        };
         handle.addEventListener("pointerdown", beginMove);
-        handle.addEventListener("dblclick", () => this.reset(id));
+        handle.addEventListener("dblclick", reset);
+        handle.addEventListener("keydown", keydown);
         resizeHandle.addEventListener("pointerdown", beginResize);
         element.addEventListener("pointerdown", focus);
         entry.cleanup.push(
             () => handle.removeEventListener("pointerdown", beginMove),
+            () => handle.removeEventListener("dblclick", reset),
+            () => handle.removeEventListener("keydown", keydown),
             () => resizeHandle.removeEventListener("pointerdown", beginResize),
             () => element.removeEventListener("pointerdown", focus)
         );

@@ -57,4 +57,12 @@ describe("layoutNodeEditorModel", () => {
             y: baselineById.get("c").y
         });
     });
+
+    it("supports independent workspace gutters", () => {
+        const layout = layoutNodeEditorModel(model(), {
+            paddingX: 260,
+            paddingY: 70
+        });
+        expect(layout.nodes[0]).toMatchObject({ x: 260, y: 70 });
+    });
 });

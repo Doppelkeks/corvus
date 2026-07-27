@@ -267,8 +267,10 @@ export class WebGpuEdgeLayer {
             height
         } = this.pending;
         const maximum = this.device.limits.maxTextureDimension2D;
-        this.canvas.width = Math.min(maximum, Math.max(1, Math.ceil(width)));
-        this.canvas.height = Math.min(maximum, Math.max(1, Math.ceil(height)));
+        const canvasWidth = Math.min(maximum, Math.max(1, Math.ceil(width)));
+        const canvasHeight = Math.min(maximum, Math.max(1, Math.ceil(height)));
+        if (this.canvas.width !== canvasWidth) this.canvas.width = canvasWidth;
+        if (this.canvas.height !== canvasHeight) this.canvas.height = canvasHeight;
         const vertices = edgeVertices(edges, selectedEdgeId, hoveredEdgeId);
         this.vertexCount = vertices.length / 6;
         if (vertices.byteLength > 0) {
