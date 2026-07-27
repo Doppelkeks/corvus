@@ -203,7 +203,7 @@ export function createGpuFontAtlasData() {
 
 function createTexture(device, width, height) {
     const texture = device.createTexture({
-        label: "Node editor Echo UI signed-distance font atlas",
+        label: "Node editor Mataera UI signed-distance font atlas",
         size: [width, height],
         format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING

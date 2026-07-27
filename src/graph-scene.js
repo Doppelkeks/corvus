@@ -49,7 +49,7 @@ const PORT_COLORS = Object.freeze({
 const TEXT = Object.freeze({
     primary: [0.88, 0.9, 0.88, 1],
     muted: [0.43, 0.48, 0.5, 1],
-    accent: [0.72, 0.95, 0.42, 1]
+    accent: [0.529, 0.839, 0.122, 1]
 });
 
 function pushShape(target, rect, fill, border, meta) {

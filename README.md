@@ -95,7 +95,7 @@ are application UI, not part of the graph surface. Glyphs come from a
 high-resolution Segoe UI Semibold signed-distance atlas uploaded directly to a
 GPU texture, so the renderer has no hidden Canvas2D or DOM fallback. Regenerate
 the checked-in atlas and its exact per-character layout metrics with
-`python scripts/generate-node-font-atlas.py`; pass `--font` when Echo's UI font
+`python scripts/generate-node-font-atlas.py`; pass `--font` when Mataera's UI font
 lives outside the standard Windows font directory.
 
 If no `gpuDevice` is supplied, the editor requests a high-performance WebGPU

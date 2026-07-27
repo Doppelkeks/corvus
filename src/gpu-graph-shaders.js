@@ -97,7 +97,7 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
         (shapeInfo.z == 4.0 && nodeSelection[nodeIndex] != 0u)
         || f32(index) == camera.display.y
     ) {
-        border = vec4f(0.72, 0.95, 0.42, 1.0);
+        border = vec4f(0.529, 0.839, 0.122, 1.0);
     }
     outputShapes[base] = rect;
     outputShapes[base + 1u] = nextFill;
@@ -156,7 +156,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let border = 1.0 - smoothstep(1.0, 2.25, edgeDistance);
     let fill = 0.105;
     let alpha = max(fill, border * 0.82);
-    return vec4f(0.72, 0.95, 0.42, alpha);
+    return vec4f(0.529, 0.839, 0.122, alpha);
 }
 `;
 
@@ -338,7 +338,7 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
     var color = edgeColor(second.z);
     if (logicalEdgeIndex == camera.state.z) {
         halfWidthPx += 1.7;
-        color = vec4f(0.72, 0.95, 0.42, 1.0);
+        color = vec4f(0.529, 0.839, 0.122, 1.0);
     } else if (logicalEdgeIndex == camera.state.w) {
         halfWidthPx += 0.9;
         color = vec4f(0.64, 0.82, 0.48, 1.0);
