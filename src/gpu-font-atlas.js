@@ -127,8 +127,8 @@ export function createGpuFontAtlas(device) {
         texture,
         view: texture.createView(),
         sampler: device.createSampler({
-            magFilter: "linear",
-            minFilter: "linear",
+            magFilter: "nearest",
+            minFilter: "nearest",
             addressModeU: "clamp-to-edge",
             addressModeV: "clamp-to-edge"
         }),

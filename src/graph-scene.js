@@ -1,4 +1,9 @@
 import { sampleCubicEdge } from "./edge-geometry.js";
+import {
+    NODE_CARD_GEOMETRY,
+    nodePortSectionTop,
+    nodePreviewRect
+} from "./node-card-geometry.js";
 
 export const GRAPH_SCENE_STRIDES = Object.freeze({
     node: 4,
@@ -9,9 +14,7 @@ export const GRAPH_SCENE_STRIDES = Object.freeze({
 });
 
 export const GRAPH_SCENE_METRICS = Object.freeze({
-    headerHeight: 48,
-    previewHeight: 124,
-    portRowHeight: 20,
+    ...NODE_CARD_GEOMETRY,
     glyphWidth: 7,
     glyphHeight: 11,
     spatialCellSize: 256
@@ -111,8 +114,7 @@ function edgeTypeIndex(type) {
 }
 
 function localPortAnchors(node, box, metrics) {
-    const portTop = metrics.headerHeight
-        + (node.preview ? metrics.previewHeight : 0);
+    const portTop = nodePortSectionTop(node, box.width, metrics);
     const ports = [];
     node.inputs.forEach((port, index) => ports.push(Object.freeze({
         id: port.id,
@@ -185,51 +187,27 @@ export function buildGraphScene(model, layout, options = {}) {
             [0.12, 0.14, 0.15, 1],
             [6, 0, 0, nodeIndex]
         );
-        pushShape(
-            shapes,
-            [9, 13, 22, 22],
-            [0.06, 0.08, 0.09, 1],
-            [0.25, 0.28, 0.29, 1],
-            [11, 1, 0, nodeIndex]
-        );
-        pushText(glyphs, String(node.order + 1), {
-            x: 15,
-            y: 19,
-            nodeIndex,
-            color: TEXT.muted,
-            width: 5.5,
-            height: 8,
-            maximum: 3
-        });
         pushText(glyphs, node.label, {
-            x: 39,
-            y: 11,
+            x: 12,
+            y: 18,
             nodeIndex,
-            maximum: 25
-        });
-        pushText(glyphs, node.type, {
-            x: 39,
-            y: 28,
-            nodeIndex,
-            color: TEXT.muted,
-            width: 5.5,
-            height: 8,
-            maximum: 30
+            maximum: 28
         });
 
         if (node.preview) {
+            const preview = nodePreviewRect(node, box.width, metrics);
             const rect = [
-                1,
-                metrics.headerHeight,
-                box.width - 2,
-                metrics.previewHeight
+                preview.x,
+                preview.y,
+                preview.width,
+                preview.height
             ];
             pushShape(
                 shapes,
                 rect,
                 [0.025, 0.032, 0.035, 1],
                 [0.09, 0.11, 0.12, 1],
-                [0, 0, 0, nodeIndex]
+                [4, 1, 0, nodeIndex]
             );
             previews.push(...rect, nodeIndex, 0, 0, 0);
         }
@@ -253,33 +231,8 @@ export function buildGraphScene(model, layout, options = {}) {
                 color: TEXT.muted,
                 width: 5.5,
                 height: 9,
-                maximum: 16,
-                align: port.direction === "output" ? "right" : "left"
-            });
-        });
-
-        const summaryTop = box.height
-            - Math.min(node.summary.length, 3) * 16
-            - 8;
-        node.summary.slice(0, 3).forEach((entry, index) => {
-            const y = summaryTop + index * 16;
-            pushText(glyphs, entry.label, {
-                x: 10,
-                y,
-                nodeIndex,
-                color: TEXT.muted,
-                width: 5.5,
-                height: 8,
-                maximum: 13
-            });
-            pushText(glyphs, entry.value, {
-                x: box.width - 10,
-                y,
-                nodeIndex,
-                width: 5.5,
-                height: 8,
                 maximum: 14,
-                align: "right"
+                align: port.direction === "output" ? "right" : "left"
             });
         });
         hitNodes.push(Object.freeze({

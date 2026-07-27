@@ -84,6 +84,24 @@ describe("layoutNodeEditorModel", () => {
         );
     });
 
+    it("keeps parameter summaries out of graph card geometry", () => {
+        const source = model();
+        const withoutSummary = layoutNodeEditorModel(source);
+        const withSummary = layoutNodeEditorModel(normalizeNodeEditorModel({
+            ...source,
+            nodes: source.nodes.map((node) => ({
+                ...node,
+                summary: node.id === "a"
+                    ? [{ label: "color", value: "#ff00ff" }]
+                    : []
+            }))
+        }));
+        const height = (layout, id) =>
+            layout.nodes.find((node) => node.nodeId === id).height;
+
+        expect(height(withSummary, "a")).toBe(height(withoutSummary, "a"));
+    });
+
     it("lays out deep graphs iteratively without overflowing the stack", () => {
         const count = 10_000;
         const nodes = Array.from({ length: count }, (_, index) => ({

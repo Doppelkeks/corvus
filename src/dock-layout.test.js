@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDockLayout } from "./dock-layout.js";
+import {
+    DockLayoutController,
+    normalizeDockLayout
+} from "./dock-layout.js";
 
 const panels = [
     { id: "catalog", defaultDock: "left" },
@@ -43,5 +46,10 @@ describe("normalizeDockLayout", () => {
         expect(result.panels.inspector.mode).toBe("right");
         expect(result.active.bottom).toBe("preview");
         expect(result.active.right).toBe("inspector");
+    });
+
+    it("exposes a shared panel focus operation for selection-driven tools", () => {
+        expect(typeof DockLayoutController.prototype.focusPanel)
+            .toBe("function");
     });
 });

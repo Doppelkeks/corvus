@@ -10,8 +10,6 @@
     min-height: 0;
     overflow: hidden;
     background-color: var(--node-editor-bg);
-    background-image: radial-gradient(#ffffff12 .7px, transparent .7px);
-    background-size: 18px 18px;
 }
 
 .node-dock-workspace {
@@ -175,6 +173,10 @@
     border: 1px solid var(--line, #252c31);
     border-radius: 8px;
     box-shadow: 0 16px 45px #0009;
+}
+
+.node-workspace-panel[hidden] {
+    display: none !important;
 }
 
 .node-workspace-panel.moving,

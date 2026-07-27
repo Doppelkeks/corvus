@@ -395,6 +395,18 @@ export class DockLayoutController {
         this.#persist();
     }
 
+    focusPanel(id) {
+        const entry = this.entries.get(id);
+        if (!entry) return false;
+        if (entry.mode === "float") {
+            entry.element.hidden = false;
+            this.bringToFront(id);
+            return true;
+        }
+        this.activate(entry.mode, id);
+        return true;
+    }
+
     setMode(id, mode) {
         const entry = this.entries.get(id);
         const nextMode = normalizeMode(mode);

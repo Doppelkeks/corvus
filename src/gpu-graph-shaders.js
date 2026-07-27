@@ -32,15 +32,25 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let graph = input.screen / camera.state.x + camera.view.zw;
-    let minorCell = 18.0;
+    let minorCell = 24.0;
     let majorCell = minorCell * 5.0;
-    let minorDistance = length(fract(graph / minorCell) - vec2f(0.5));
-    let majorDistance = length(fract(graph / majorCell) - vec2f(0.5));
-    let minor = 1.0 - smoothstep(0.045, 0.08, minorDistance);
-    let major = 1.0 - smoothstep(0.028, 0.065, majorDistance);
-    let grid = minor * 0.17 + major * 0.38;
+    let minorCoordinate = abs(fract(graph / minorCell - 0.5) - 0.5);
+    let majorCoordinate = abs(fract(graph / majorCell - 0.5) - 0.5);
+    let minorWidth = max(fwidth(graph / minorCell), vec2f(0.0005));
+    let majorWidth = max(fwidth(graph / majorCell), vec2f(0.0005));
+    let minorDistance = min(
+        minorCoordinate.x / minorWidth.x,
+        minorCoordinate.y / minorWidth.y
+    );
+    let majorDistance = min(
+        majorCoordinate.x / majorWidth.x,
+        majorCoordinate.y / majorWidth.y
+    );
+    let minor = 1.0 - smoothstep(0.2, 1.1, minorDistance);
+    let major = 1.0 - smoothstep(0.15, 1.0, majorDistance);
+    let grid = minor * 0.075 + major * 0.16;
     return vec4f(
-        vec3f(0.022, 0.027, 0.03) + vec3f(0.13, 0.16, 0.15) * grid,
+        vec3f(0.022, 0.026, 0.028) + vec3f(0.12, 0.14, 0.13) * grid,
         1.0
     );
 }
@@ -127,7 +137,10 @@ fn vertexMain(
     let base = instanceIndex * 4u;
     let rect = shapes[base];
     let graphPosition = rect.xy + rect.zw * corner;
-    let screen = (graphPosition - camera.view.zw) * camera.state.x;
+    let unsnappedScreen =
+        (graphPosition - camera.view.zw) * camera.state.x;
+    let pixelRatio = max(camera.display.x, 1.0);
+    let screen = round(unsnappedScreen * pixelRatio) / pixelRatio;
     var output: VertexOutput;
     output.position = vec4f(
         screen.x / camera.view.x * 2.0 - 1.0,
@@ -348,7 +361,10 @@ fn vertexMain(
     let glyphInfo = glyphs[base + 3u];
     let node = nodes[u32(glyphInfo.x)];
     let graphPosition = node.xy + rect.xy + rect.zw * corner;
-    let screen = (graphPosition - camera.view.zw) * camera.state.x;
+    let unsnappedScreen =
+        (graphPosition - camera.view.zw) * camera.state.x;
+    let pixelRatio = max(camera.display.x, 1.0);
+    let screen = round(unsnappedScreen * pixelRatio) / pixelRatio;
     var output: VertexOutput;
     output.position = vec4f(
         screen.x / camera.view.x * 2.0 - 1.0,

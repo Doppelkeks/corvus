@@ -1,13 +1,13 @@
+import {
+    NODE_CARD_GEOMETRY,
+    nodeCardHeight
+} from "./node-card-geometry.js";
+
 const DEFAULT_LAYOUT = Object.freeze({
     padding: 36,
     columnGap: 110,
     rowGap: 34,
-    nodeWidth: 220,
-    minimumNodeHeight: 96,
-    headerHeight: 48,
-    previewHeight: 124,
-    portRowHeight: 20,
-    summaryRowHeight: 16
+    ...NODE_CARD_GEOMETRY
 });
 
 function finitePosition(value) {
@@ -15,17 +15,6 @@ function finitePosition(value) {
         value
         && Number.isFinite(value.x)
         && Number.isFinite(value.y)
-    );
-}
-
-function nodeHeight(node, settings) {
-    const rows = Math.max(node.inputs.length, node.outputs.length, 1);
-    return Math.max(
-        settings.minimumNodeHeight,
-        settings.headerHeight
-            + (node.preview ? settings.previewHeight : 0)
-            + rows * settings.portRowHeight
-            + Math.min(node.summary.length, 3) * settings.summaryRowHeight
     );
 }
 
@@ -120,7 +109,11 @@ export function layoutNodeEditorModel(model, {
         column.sort((left, right) =>
             left.order - right.order || left.id.localeCompare(right.id));
         for (const node of column) {
-            const height = nodeHeight(node, settings);
+            const height = nodeCardHeight(
+                node,
+                settings.nodeWidth,
+                settings
+            );
             automaticById.set(node.id, {
                 x: paddingX + depth * (
                     settings.nodeWidth + settings.columnGap

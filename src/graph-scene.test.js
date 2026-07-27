@@ -64,6 +64,37 @@ describe("buildGraphScene", () => {
         expect(edgeStart.y).toBe(source.y + output.y);
     });
 
+    it("renders square previews without parameter text on graph cards", () => {
+        const withSummary = normalizeNodeEditorModel({
+            ...fixture(),
+            nodes: fixture().nodes.map((node) => ({
+                ...node,
+                preview: node.id === "source"
+                    ? { aspectRatio: 1 }
+                    : node.preview
+            }))
+        });
+        const withoutSummary = normalizeNodeEditorModel({
+            ...withSummary,
+            nodes: withSummary.nodes.map((node) => ({
+                ...node,
+                summary: []
+            }))
+        });
+        const scene = buildGraphScene(
+            withSummary,
+            layoutNodeEditorModel(withSummary)
+        );
+        const summaryFreeScene = buildGraphScene(
+            withoutSummary,
+            layoutNodeEditorModel(withoutSummary)
+        );
+        const preview = [...scene.previews.slice(0, 4)];
+
+        expect(preview[2]).toBe(preview[3]);
+        expect(scene.glyphs.length).toBe(summaryFreeScene.glyphs.length);
+    });
+
     it("packs release-scale graphs into bounded transferable arrays", () => {
         const nodeCount = 2_048;
         const model = normalizeNodeEditorModel({

@@ -34,4 +34,20 @@ describe("GPU-only graph surface architecture", () => {
         expect(worker).toContain("buildGraphScene");
         expect(worker).toContain("transferableScene");
     });
+
+    it("keeps graph text crisp and renders a quiet line grid", () => {
+        const fontAtlas = source("./gpu-font-atlas.js");
+        const shaders = source("./gpu-graph-shaders.js");
+        const styles = source("./styles.css");
+        expect(fontAtlas).toContain('magFilter: "nearest"');
+        expect(fontAtlas).toContain('minFilter: "nearest"');
+        expect(shaders).toContain("round(unsnappedScreen * pixelRatio)");
+        expect(shaders).toContain("minorCoordinate");
+        expect(shaders).not.toContain(
+            "length(fract(graph / minorCell)"
+        );
+        expect(styles).not.toContain("radial-gradient");
+        expect(styles).toContain(".node-workspace-panel[hidden]");
+        expect(styles).toContain("display: none !important");
+    });
 });
