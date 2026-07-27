@@ -1,9 +1,12 @@
 const COLUMNS = 16;
 const ROWS = 6;
-const CELL_WIDTH = 8;
-const CELL_HEIGHT = 10;
 const GLYPH_WIDTH = 5;
 const GLYPH_HEIGHT = 7;
+const GLYPH_SCALE = 4;
+const SIGNED_DISTANCE_RANGE = 4;
+const CELL_PADDING = SIGNED_DISTANCE_RANGE + 1;
+const CELL_WIDTH = GLYPH_WIDTH * GLYPH_SCALE + CELL_PADDING * 2;
+const CELL_HEIGHT = GLYPH_HEIGHT * GLYPH_SCALE + CELL_PADDING * 2;
 
 const GLYPHS = Object.freeze({
     " ": "00000000000000",
@@ -43,6 +46,32 @@ const GLYPHS = Object.freeze({
     X: "11110a040a1111",
     Y: "11110a04040404",
     Z: "1f01020408101f",
+    a: "00000e010f110f",
+    b: "10101e1111111e",
+    c: "00000f1010100f",
+    d: "01010f1111110f",
+    e: "00000e111f100e",
+    f: "0609081e080808",
+    g: "000f11110f010e",
+    h: "10101e11111111",
+    i: "04000c0404040e",
+    j: "0200060202120c",
+    k: "10101214181412",
+    l: "0c04040404040e",
+    m: "00001a15151515",
+    n: "00001e11111111",
+    o: "00000e1111110e",
+    p: "001e11111e1010",
+    q: "000f11110f0101",
+    r: "00001619101010",
+    s: "00000f100e011e",
+    t: "08081e08080906",
+    u: "0000111111110f",
+    v: "00001111110a04",
+    w: "0000111115150a",
+    x: "0000110a040a11",
+    y: "001111110f010e",
+    z: "00001f0204081f",
     ".": "00000000000c0c",
     ",": "00000000000c08",
     ":": "000c0c000c0c00",
@@ -82,26 +111,79 @@ function glyphRows(character) {
         Number.parseInt(encoded.slice(index * 2, index * 2 + 2), 16));
 }
 
+function glyphMask(rows) {
+    const mask = new Uint8Array(CELL_WIDTH * CELL_HEIGHT);
+    for (let y = 0; y < GLYPH_HEIGHT * GLYPH_SCALE; y += 1) {
+        const sourceY = Math.floor(y / GLYPH_SCALE);
+        const row = rows[sourceY];
+        for (let x = 0; x < GLYPH_WIDTH * GLYPH_SCALE; x += 1) {
+            const sourceX = Math.floor(x / GLYPH_SCALE);
+            const bit = 1 << (GLYPH_WIDTH - 1 - sourceX);
+            if ((row & bit) === 0) continue;
+            const targetX = CELL_PADDING + x;
+            const targetY = CELL_PADDING + y;
+            mask[targetY * CELL_WIDTH + targetX] = 1;
+        }
+    }
+    return mask;
+}
+
+function signedDistanceAlpha(mask, x, y) {
+    const inside = mask[y * CELL_WIDTH + x] === 1;
+    let distance = SIGNED_DISTANCE_RANGE;
+    for (
+        let offsetY = -SIGNED_DISTANCE_RANGE;
+        offsetY <= SIGNED_DISTANCE_RANGE;
+        offsetY += 1
+    ) {
+        const sampleY = y + offsetY;
+        if (sampleY < 0 || sampleY >= CELL_HEIGHT) continue;
+        for (
+            let offsetX = -SIGNED_DISTANCE_RANGE;
+            offsetX <= SIGNED_DISTANCE_RANGE;
+            offsetX += 1
+        ) {
+            const sampleX = x + offsetX;
+            if (sampleX < 0 || sampleX >= CELL_WIDTH) continue;
+            const sampleInside =
+                mask[sampleY * CELL_WIDTH + sampleX] === 1;
+            if (sampleInside === inside) continue;
+            distance = Math.min(
+                distance,
+                Math.hypot(offsetX, offsetY)
+            );
+        }
+    }
+    const signedDistance = inside ? distance : -distance;
+    return Math.round(
+        Math.max(0, Math.min(
+            1,
+            0.5 + signedDistance / (SIGNED_DISTANCE_RANGE * 2)
+        )) * 255
+    );
+}
+
 function atlasPixels() {
     const width = COLUMNS * CELL_WIDTH;
     const height = ROWS * CELL_HEIGHT;
     const pixels = new Uint8Array(width * height * 4);
     for (let code = 32; code <= 126; code += 1) {
         const index = code - 32;
-        const cellX = (index % COLUMNS) * CELL_WIDTH + 1;
-        const cellY = Math.floor(index / COLUMNS) * CELL_HEIGHT + 1;
-        glyphRows(String.fromCharCode(code)).forEach((row, y) => {
-            for (let x = 0; x < GLYPH_WIDTH; x += 1) {
-                if ((row & (1 << (GLYPH_WIDTH - 1 - x))) === 0) continue;
+        const cellX = (index % COLUMNS) * CELL_WIDTH;
+        const cellY = Math.floor(index / COLUMNS) * CELL_HEIGHT;
+        const mask = glyphMask(glyphRows(String.fromCharCode(code)));
+        for (let y = 0; y < CELL_HEIGHT; y += 1) {
+            for (let x = 0; x < CELL_WIDTH; x += 1) {
+                const alpha = signedDistanceAlpha(mask, x, y);
                 const offset = (
                     (cellY + y) * width + cellX + x
                 ) * 4;
                 pixels[offset] = 255;
                 pixels[offset + 1] = 255;
                 pixels[offset + 2] = 255;
-                pixels[offset + 3] = 255;
+                pixels[offset + 3] = alpha;
             }
-        });
+        }
     }
     return { width, height, pixels };
 }
@@ -109,7 +191,7 @@ function atlasPixels() {
 export function createGpuFontAtlas(device) {
     const { width, height, pixels } = atlasPixels();
     const texture = device.createTexture({
-        label: "Node editor bitmap font atlas",
+        label: "Node editor signed-distance font atlas",
         size: [width, height],
         format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
@@ -127,8 +209,8 @@ export function createGpuFontAtlas(device) {
         texture,
         view: texture.createView(),
         sampler: device.createSampler({
-            magFilter: "nearest",
-            minFilter: "nearest",
+            magFilter: "linear",
+            minFilter: "linear",
             addressModeU: "clamp-to-edge",
             addressModeV: "clamp-to-edge"
         }),

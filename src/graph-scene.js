@@ -15,8 +15,8 @@ export const GRAPH_SCENE_STRIDES = Object.freeze({
 
 export const GRAPH_SCENE_METRICS = Object.freeze({
     ...NODE_CARD_GEOMETRY,
-    glyphWidth: 7,
-    glyphHeight: 11,
+    glyphWidth: 6.5,
+    glyphHeight: 10,
     spatialCellSize: 256
 });
 
@@ -57,6 +57,22 @@ function glyphUv(character) {
     return [column / 16, row / 6, 1 / 16, 1 / 6];
 }
 
+function glyphAdvance(character, width) {
+    if (character === " ") return width * 0.48;
+    if ("iIl1.,:;!'|".includes(character)) return width * 0.56;
+    if ("mMwW@%".includes(character)) return width * 1.02;
+    return width * 0.82;
+}
+
+function textWidth(value, width, maximum) {
+    const characters = [...String(value ?? "").slice(0, maximum)];
+    if (characters.length === 0) return 0;
+    return characters.slice(0, -1).reduce(
+        (total, character) => total + glyphAdvance(character, width),
+        width
+    );
+}
+
 function pushText(
     target,
     value,
@@ -71,13 +87,14 @@ function pushText(
         align = "left"
     }
 ) {
-    const text = String(value ?? "").slice(0, maximum);
+    const text = [...String(value ?? "").slice(0, maximum)];
     const startX = align === "right"
-        ? x - text.length * width
+        ? x - textWidth(text.join(""), width, maximum)
         : x;
-    [...text].forEach((character, index) => {
+    let cursorX = startX;
+    text.forEach((character) => {
         target.push(
-            startX + index * width,
+            cursorX,
             y,
             width,
             height,
@@ -88,6 +105,7 @@ function pushText(
             0,
             0
         );
+        cursorX += glyphAdvance(character, width);
     });
 }
 
@@ -201,7 +219,7 @@ export function buildGraphScene(model, layout, options = {}) {
         );
         pushText(glyphs, node.label, {
             x: 12,
-            y: 18,
+            y: 12,
             nodeIndex,
             maximum: 28
         });
@@ -231,7 +249,11 @@ export function buildGraphScene(model, layout, options = {}) {
                 String(port.id).length,
                 maximumCharacters
             );
-            const labelWidth = labelLength * 5.5 + 14;
+            const labelWidth = textWidth(
+                port.id,
+                5.5,
+                labelLength
+            ) + 14;
             const labelX = port.direction === "input"
                 ? 5
                 : box.width - labelWidth - 5;

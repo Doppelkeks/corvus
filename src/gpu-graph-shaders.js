@@ -380,7 +380,13 @@ fn vertexMain(
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let sample = textureSample(atlasTexture, atlasSampler, input.uv);
-    return vec4f(input.color.rgb, input.color.a * sample.a);
+    let edgeWidth = max(fwidth(sample.a), 0.025);
+    let coverage = smoothstep(
+        0.5 - edgeWidth,
+        0.5 + edgeWidth,
+        sample.a
+    );
+    return vec4f(input.color.rgb, input.color.a * coverage);
 }
 `;
 

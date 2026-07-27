@@ -107,7 +107,7 @@ describe("layoutNodeEditorModel", () => {
         const many = layout.nodes.find((node) => node.nodeId === "many");
 
         expect(many.height).toBe(few.height);
-        expect(many.height).toBe(268);
+        expect(many.height).toBe(254);
     });
 
     it("keeps parameter summaries out of graph card geometry", () => {

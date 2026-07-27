@@ -39,13 +39,16 @@ describe("GPU-only graph surface architecture", () => {
         expect(worker).toContain("transferableScene");
     });
 
-    it("keeps graph text crisp and renders a quiet line grid", () => {
+    it("uses antialiased GPU text and renders a quiet line grid", () => {
         const fontAtlas = source("./gpu-font-atlas.js");
         const shaders = source("./gpu-graph-shaders.js");
         const styles = source("./styles.css");
-        expect(fontAtlas).toContain('magFilter: "nearest"');
-        expect(fontAtlas).toContain('minFilter: "nearest"');
+        expect(fontAtlas).toContain('magFilter: "linear"');
+        expect(fontAtlas).toContain('minFilter: "linear"');
+        expect(fontAtlas).toContain("SIGNED_DISTANCE_RANGE");
+        expect(fontAtlas).toContain('a: "00000e010f110f"');
         expect(shaders).toContain("round(unsnappedScreen * pixelRatio)");
+        expect(shaders).toContain("fwidth(sample.a)");
         expect(shaders).toContain("minorCoordinate");
         expect(shaders).not.toContain(
             "length(fract(graph / minorCell)"

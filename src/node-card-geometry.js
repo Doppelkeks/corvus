@@ -1,7 +1,7 @@
 export const NODE_CARD_GEOMETRY = Object.freeze({
     nodeWidth: 220,
     minimumNodeHeight: 96,
-    headerHeight: 48,
+    headerHeight: 34,
     previewInset: 8,
     portSectionGap: 8,
     portRowHeight: 20,
