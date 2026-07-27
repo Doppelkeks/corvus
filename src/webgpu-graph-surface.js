@@ -75,12 +75,12 @@ export class WebGpuGraphSurface {
     async initialize(device = this.device) {
         if (!device) {
             if (!navigator.gpu) {
-                throw new Error("WebGPU is required for the graph editor");
+                throw new Error("Graphics acceleration is required for the graph editor");
             }
             const adapter = await navigator.gpu.requestAdapter({
                 powerPreference: "high-performance"
             });
-            if (!adapter) throw new Error("No WebGPU adapter is available");
+            if (!adapter) throw new Error("No compatible graphics adapter is available");
             device = await adapter.requestDevice();
         }
         this.device = device;
@@ -92,7 +92,7 @@ export class WebGpuGraphSurface {
         device.addEventListener("uncapturederror", this.deviceErrorHandler);
         this.context = this.canvas.getContext("webgpu");
         if (!this.context) {
-            throw new Error("Could not create the WebGPU canvas context");
+            throw new Error("Could not create the accelerated canvas context");
         }
         this.format = navigator.gpu.getPreferredCanvasFormat();
         this.context.configure({
@@ -118,7 +118,7 @@ export class WebGpuGraphSurface {
         const pipelineError = await device.popErrorScope();
         if (pipelineError) {
             throw new Error(
-                `Node editor WebGPU pipeline failed: ${pipelineError.message}`
+                `Node editor rendering pipeline failed: ${pipelineError.message}`
             );
         }
         this.resize();

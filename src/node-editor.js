@@ -79,14 +79,14 @@ export class NodeEditor {
         this.viewport.setAttribute("role", "application");
         this.viewport.setAttribute(
             "aria-label",
-            "WebGPU node graph editor. Drag node headers to move. Alt-drag or middle-drag to pan."
+            "Node graph editor. Drag node headers to move. Alt-drag or middle-drag to pan."
         );
         this.canvas = document.createElement("canvas");
         this.canvas.className = "node-editor-gpu-surface";
         this.selectionStatus = element(
             "div",
             "node-editor-selection-status",
-            "WebGPU graph surface"
+            "Accelerated graph surface"
         );
         this.selectionStatus.setAttribute("aria-live", "polite");
         this.viewport.append(this.canvas, this.selectionStatus);
@@ -102,7 +102,7 @@ export class NodeEditor {
         this.ready = this.surface.initialize(gpuDevice).catch((error) => {
             container.classList.add("gpu-unavailable");
             this.selectionStatus.textContent =
-                "WebGPU graph renderer unavailable";
+                "Graph renderer unavailable";
             this.onError?.(error);
             throw error;
         });
@@ -227,7 +227,7 @@ export class NodeEditor {
         this.surface.setView(this.view);
         this.surface.setPreviewTextures(this.previewStates);
         this.selectionStatus.textContent =
-            `${this.model.nodes.length} nodes · ${this.model.edges.length} connections · WebGPU compute`;
+            `${this.model.nodes.length} nodes · ${this.model.edges.length} connections · accelerated rendering`;
         this.#syncInteraction();
         if (notifyPositions) {
             this.callbacks.onPositionsChange?.(this.getPositions());
@@ -542,7 +542,7 @@ export class NodeEditor {
         this.selectedEdgeId = null;
         this.selectedPort = null;
         this.#syncInteraction();
-        this.selectionStatus.textContent = "WebGPU graph surface";
+        this.selectionStatus.textContent = "Accelerated graph surface";
         this.callbacks.onClearSelection?.();
     }
 

@@ -160,7 +160,7 @@
     padding: 32px;
     background: #090a09ef;
     color: #f08d83;
-    content: "WebGPU is required for the graph renderer.";
+    content: "Graphics acceleration is required for the graph renderer.";
     font-size: 11px;
     text-align: center;
 }
