@@ -1,5 +1,10 @@
 import { sampleCubicEdge } from "./edge-geometry.js";
 import {
+    gpuGlyphAdvance,
+    gpuGlyphQuadWidth,
+    gpuTextWidth
+} from "./gpu-font-layout.js";
+import {
     NODE_CARD_GEOMETRY,
     nodePortYPositions,
     nodePreviewRect
@@ -15,7 +20,7 @@ export const GRAPH_SCENE_STRIDES = Object.freeze({
 
 export const GRAPH_SCENE_METRICS = Object.freeze({
     ...NODE_CARD_GEOMETRY,
-    glyphWidth: 8.4,
+    glyphWidth: gpuGlyphQuadWidth(16),
     glyphHeight: 16,
     spatialCellSize: 256
 });
@@ -57,22 +62,6 @@ function glyphUv(character) {
     return [column / 16, row / 6, 1 / 16, 1 / 6];
 }
 
-function glyphAdvance(character, width) {
-    if (character === " ") return width * 0.48;
-    if ("iIl1.,:;!'|".includes(character)) return width * 0.56;
-    if ("mMwW@%".includes(character)) return width * 1.02;
-    return width * 0.82;
-}
-
-function textWidth(value, width, maximum) {
-    const characters = [...String(value ?? "").slice(0, maximum)];
-    if (characters.length === 0) return 0;
-    return characters.slice(0, -1).reduce(
-        (total, character) => total + glyphAdvance(character, width),
-        width
-    );
-}
-
 function pushText(
     target,
     value,
@@ -81,15 +70,15 @@ function pushText(
         y,
         nodeIndex,
         color = TEXT.primary,
-        width = GRAPH_SCENE_METRICS.glyphWidth,
         height = GRAPH_SCENE_METRICS.glyphHeight,
         maximum = 28,
         align = "left"
     }
 ) {
     const text = [...String(value ?? "").slice(0, maximum)];
+    const width = gpuGlyphQuadWidth(height);
     const startX = align === "right"
-        ? x - textWidth(text.join(""), width, maximum)
+        ? x - gpuTextWidth(text.join(""), height, maximum)
         : x;
     let cursorX = startX;
     text.forEach((character) => {
@@ -105,7 +94,7 @@ function pushText(
             0,
             0
         );
-        cursorX += glyphAdvance(character, width);
+        cursorX += gpuGlyphAdvance(character, height);
     });
 }
 
@@ -249,9 +238,9 @@ export function buildGraphScene(model, layout, options = {}) {
                 String(port.id).length,
                 maximumCharacters
             );
-            const labelWidth = textWidth(
+            const labelWidth = gpuTextWidth(
                 port.id,
-                6.4,
+                12.5,
                 labelLength
             ) + 15;
             const labelX = port.direction === "input"
@@ -279,7 +268,6 @@ export function buildGraphScene(model, layout, options = {}) {
                 y: port.y - 6,
                 nodeIndex,
                 color: TEXT.primary,
-                width: 7,
                 height: 12.5,
                 maximum: maximumCharacters,
                 align: port.direction === "output" ? "right" : "left"

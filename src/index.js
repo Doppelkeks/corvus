@@ -26,6 +26,12 @@ export {
     selectionRectangle
 } from "./selection-geometry.js";
 export {
+    GPU_FONT_LAYOUT,
+    gpuGlyphAdvance,
+    gpuGlyphQuadWidth,
+    gpuTextWidth
+} from "./gpu-font-layout.js";
+export {
     connectionForPorts,
     portsCanConnect
 } from "./port-connection.js";

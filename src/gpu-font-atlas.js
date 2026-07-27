@@ -1,14 +1,15 @@
 import { glyphStrokePaths } from "./stroke-font.js";
+import { GPU_FONT_LAYOUT } from "./gpu-font-layout.js";
 
-const COLUMNS = 16;
-const ROWS = 6;
+const COLUMNS = GPU_FONT_LAYOUT.columns;
+const ROWS = GPU_FONT_LAYOUT.rows;
 const GLYPH_WIDTH = 5;
 const GLYPH_HEIGHT = 7;
 const GLYPH_SCALE = 8;
 const SIGNED_DISTANCE_RANGE = 10;
 const CELL_PADDING = 12;
-const CELL_WIDTH = GLYPH_WIDTH * GLYPH_SCALE + CELL_PADDING * 2;
-const CELL_HEIGHT = GLYPH_HEIGHT * GLYPH_SCALE + CELL_PADDING * 2;
+const CELL_WIDTH = GPU_FONT_LAYOUT.cellWidth;
+const CELL_HEIGHT = GPU_FONT_LAYOUT.cellHeight;
 const DIAGONAL_DISTANCE = Math.SQRT2;
 const UI_FONT_ATLAS_URL = new URL(
     "./assets/echo-ui-semibold-sdf.png",
