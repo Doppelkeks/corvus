@@ -1,9 +1,9 @@
 .node-editor {
-    --node-editor-bg: #090b0d;
-    --node-editor-panel: #11151af5;
-    --node-editor-line: #323941;
-    --node-editor-text: #cad0d4;
-    --node-editor-muted: #758087;
+    --node-editor-bg: #090a09;
+    --node-editor-panel: #111311f5;
+    --node-editor-line: #343832;
+    --node-editor-text: #d0d2cb;
+    --node-editor-muted: #7c8178;
     --node-editor-accent: #b8f36b;
     position: relative;
     min-width: 0;
@@ -24,7 +24,7 @@
     grid-template-rows: 34px minmax(0, 1fr);
     overflow: hidden;
     border-color: var(--node-editor-line, rgba(255, 255, 255, .1));
-    background: var(--node-editor-panel, #11151a);
+    background: var(--node-editor-panel, #111311);
 }
 
 .node-workspace-dock[hidden] {
@@ -49,7 +49,7 @@
     border-right: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
     border-bottom: 2px solid transparent;
     background: transparent;
-    color: var(--node-editor-muted, #758087);
+    color: var(--node-editor-muted, #7c8178);
     padding: 0 14px;
     font: 700 8px/1 ui-sans-serif, system-ui, sans-serif;
     letter-spacing: .06em;
@@ -59,7 +59,7 @@
 
 .node-dock-tab[aria-selected="true"] {
     border-bottom-color: var(--node-editor-accent, #b8f36b);
-    color: var(--node-editor-text, #cad0d4);
+    color: var(--node-editor-text, #d0d2cb);
     background: rgba(255, 255, 255, .025);
 }
 
@@ -92,7 +92,7 @@
     border: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
     border-radius: 4px;
     background: rgba(0, 0, 0, .2);
-    color: var(--node-editor-muted, #758087);
+    color: var(--node-editor-muted, #7c8178);
     padding: 0 4px;
     font: 7px/1 ui-sans-serif, system-ui, sans-serif;
     cursor: pointer;
@@ -158,7 +158,7 @@
     display: grid;
     place-items: center;
     padding: 32px;
-    background: #090b0def;
+    background: #090a09ef;
     color: #f08d83;
     content: "WebGPU is required for the graph renderer.";
     font-size: 11px;
@@ -170,7 +170,7 @@
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    border: 1px solid var(--line, #252c31);
+    border: 1px solid var(--line, #292d28);
     border-radius: 8px;
     box-shadow: 0 16px 45px #0009;
 }

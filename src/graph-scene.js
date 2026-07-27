@@ -22,15 +22,15 @@ export const GRAPH_SCENE_METRICS = Object.freeze({
 
 const CATEGORY_COLORS = Object.freeze({
     noise: [0.07, 0.18, 0.14, 1],
-    grunge: [0.07, 0.18, 0.14, 1],
-    alpha: [0.07, 0.18, 0.14, 1],
-    pattern: [0.07, 0.18, 0.14, 1],
+    grunge: [0.18, 0.16, 0.09, 1],
+    alpha: [0.11, 0.16, 0.1, 1],
+    pattern: [0.16, 0.15, 0.09, 1],
     material: [0.16, 0.09, 0.22, 1],
     "custom-code": [0.2, 0.15, 0.07, 1],
     output: [0.11, 0.16, 0.09, 1],
-    default: [0.075, 0.09, 0.105, 1],
-    atomic: [0.075, 0.09, 0.105, 1],
-    normal: [0.08, 0.11, 0.2, 1]
+    default: [0.08, 0.085, 0.075, 1],
+    atomic: [0.08, 0.085, 0.075, 1],
+    normal: [0.13, 0.15, 0.08, 1]
 });
 
 const PORT_COLORS = Object.freeze({
@@ -176,8 +176,8 @@ export function buildGraphScene(model, layout, options = {}) {
         pushShape(
             shapes,
             [0, 0, box.width, box.height],
-            [0.045, 0.055, 0.065, 0.98],
-            [0.19, 0.22, 0.24, 1],
+            [0.05, 0.052, 0.048, 0.98],
+            [0.2, 0.21, 0.19, 1],
             [6, 1, 1, nodeIndex]
         );
         pushShape(
@@ -205,8 +205,8 @@ export function buildGraphScene(model, layout, options = {}) {
             pushShape(
                 shapes,
                 rect,
-                [0.025, 0.032, 0.035, 1],
-                [0.09, 0.11, 0.12, 1],
+                [0.028, 0.03, 0.027, 1],
+                [0.1, 0.11, 0.095, 1],
                 [4, 1, 0, nodeIndex]
             );
             previews.push(...rect, nodeIndex, 0, 0, 0);

@@ -50,7 +50,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let major = 1.0 - smoothstep(0.15, 1.0, majorDistance);
     let grid = minor * 0.075 + major * 0.16;
     return vec4f(
-        vec3f(0.022, 0.026, 0.028) + vec3f(0.12, 0.14, 0.13) * grid,
+        vec3f(0.024, 0.025, 0.022) + vec3f(0.13, 0.14, 0.11) * grid,
         1.0
     );
 }

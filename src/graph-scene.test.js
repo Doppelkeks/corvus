@@ -95,6 +95,31 @@ describe("buildGraphScene", () => {
         expect(scene.glyphs.length).toBe(summaryFreeScene.glyphs.length);
     });
 
+    it("keeps normal-node header surfaces neutral instead of blue", () => {
+        const model = normalizeNodeEditorModel({
+            id: "neutral-normal-node",
+            nodes: [{
+                id: "normal",
+                label: "Height To Normal",
+                category: "normal",
+                inputs: [{ id: "in", type: "grayscale" }],
+                outputs: [{ id: "out", type: "color" }]
+            }],
+            edges: []
+        });
+        const scene = buildGraphScene(
+            model,
+            layoutNodeEditorModel(model)
+        );
+        const headerFillOffset = GRAPH_SCENE_STRIDES.shape + 4;
+        const headerFill = scene.shapes.slice(
+            headerFillOffset,
+            headerFillOffset + 4
+        );
+
+        expect(headerFill[2]).toBeLessThan(headerFill[1]);
+    });
+
     it("packs release-scale graphs into bounded transferable arrays", () => {
         const nodeCount = 2_048;
         const model = normalizeNodeEditorModel({
