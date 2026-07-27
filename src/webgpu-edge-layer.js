@@ -9,12 +9,14 @@ struct ViewUniform {
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) color: vec4f,
+    @location(1) edge: vec2f,
 }
 
 @vertex
 fn vertexMain(
     @location(0) position: vec2f,
-    @location(1) color: vec4f
+    @location(1) color: vec4f,
+    @location(2) edge: vec2f
 ) -> VertexOutput {
     var output: VertexOutput;
     let normalized = position / view.resolution;
@@ -25,12 +27,21 @@ fn vertexMain(
         1.0
     );
     output.color = color;
+    output.edge = edge;
     return output;
 }
 
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-    return input.color;
+    let distance = abs(input.edge.x);
+    let halfWidth = input.edge.y;
+    let antialias = max(fwidth(input.edge.x), 0.72);
+    let coverage = 1.0 - smoothstep(
+        halfWidth - antialias,
+        halfWidth + antialias,
+        distance
+    );
+    return vec4f(input.color.rgb, input.color.a * coverage);
 }
 `;
 
@@ -61,27 +72,113 @@ function edgeColor(edge, selected, hovered) {
     return base;
 }
 
-function appendVertex(target, point, color) {
-    target.push(point.x, point.y, ...color);
+function appendVertex(target, point, color, signedDistance, halfWidth) {
+    target.push(
+        point.x,
+        point.y,
+        ...color,
+        signedDistance,
+        halfWidth
+    );
 }
 
-function appendSegmentQuad(target, from, to, width, color) {
+function segmentNormal(from, to) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const length = Math.hypot(dx, dy);
-    if (length < 0.001) return;
-    const px = (-dy / length) * width * 0.5;
-    const py = (dx / length) * width * 0.5;
-    const a = { x: from.x + px, y: from.y + py };
-    const b = { x: from.x - px, y: from.y - py };
-    const c = { x: to.x + px, y: to.y + py };
-    const d = { x: to.x - px, y: to.y - py };
-    appendVertex(target, a, color);
-    appendVertex(target, b, color);
-    appendVertex(target, c, color);
-    appendVertex(target, c, color);
-    appendVertex(target, b, color);
-    appendVertex(target, d, color);
+    return length < 0.001
+        ? { x: 0, y: 1 }
+        : { x: -dy / length, y: dx / length };
+}
+
+function joinNormal(previous, next) {
+    const x = previous.x + next.x;
+    const y = previous.y + next.y;
+    const length = Math.hypot(x, y);
+    if (length < 0.001) return next;
+    const normal = { x: x / length, y: y / length };
+    const alignment = Math.max(
+        0.4,
+        normal.x * next.x + normal.y * next.y
+    );
+    const miter = Math.min(2.5, 1 / alignment);
+    return { x: normal.x * miter, y: normal.y * miter };
+}
+
+function appendPolylineRibbon(target, points, width, color) {
+    if (points.length < 2) return;
+    const halfWidth = width * 0.5;
+    const extent = halfWidth + 1.35;
+    const segmentNormals = [];
+    for (let index = 1; index < points.length; index += 1) {
+        segmentNormals.push(segmentNormal(points[index - 1], points[index]));
+    }
+    const pairs = points.map((point, index) => {
+        const normal = index === 0
+            ? segmentNormals[0]
+            : index === points.length - 1
+                ? segmentNormals.at(-1)
+                : joinNormal(
+                    segmentNormals[index - 1],
+                    segmentNormals[index]
+                );
+        return {
+            positive: {
+                x: point.x + normal.x * extent,
+                y: point.y + normal.y * extent
+            },
+            negative: {
+                x: point.x - normal.x * extent,
+                y: point.y - normal.y * extent
+            }
+        };
+    });
+    for (let index = 1; index < pairs.length; index += 1) {
+        const previous = pairs[index - 1];
+        const current = pairs[index];
+        appendVertex(
+            target,
+            previous.positive,
+            color,
+            extent,
+            halfWidth
+        );
+        appendVertex(
+            target,
+            previous.negative,
+            color,
+            -extent,
+            halfWidth
+        );
+        appendVertex(
+            target,
+            current.positive,
+            color,
+            extent,
+            halfWidth
+        );
+        appendVertex(
+            target,
+            current.positive,
+            color,
+            extent,
+            halfWidth
+        );
+        appendVertex(
+            target,
+            previous.negative,
+            color,
+            -extent,
+            halfWidth
+        );
+        appendVertex(
+            target,
+            current.negative,
+            color,
+            -extent,
+            halfWidth
+        );
+    }
 }
 
 function edgeVertices(edges, selectedEdgeId, hoveredEdgeId) {
@@ -93,15 +190,7 @@ function edgeVertices(edges, selectedEdgeId, hoveredEdgeId) {
         const hovered = edge.id === hoveredEdgeId;
         const color = edgeColor(edge, selected, hovered);
         const width = selected ? 4 : hovered ? 3 : edge.type === "bundle" ? 2.4 : 1.7;
-        for (let index = 1; index < edge.points.length; index += 1) {
-            appendSegmentQuad(
-                values,
-                edge.points[index - 1],
-                edge.points[index],
-                width,
-                color
-            );
-        }
+        appendPolylineRibbon(values, edge.points, width, color);
     }
     return new Float32Array(values);
 }
@@ -177,7 +266,7 @@ export class WebGpuEdgeLayer {
                 module,
                 entryPoint: "vertexMain",
                 buffers: [{
-                    arrayStride: 24,
+                    arrayStride: 32,
                     attributes: [
                         {
                             shaderLocation: 0,
@@ -188,6 +277,11 @@ export class WebGpuEdgeLayer {
                             shaderLocation: 1,
                             offset: 8,
                             format: "float32x4"
+                        },
+                        {
+                            shaderLocation: 2,
+                            offset: 24,
+                            format: "float32x2"
                         }
                     ]
                 }]
@@ -267,12 +361,26 @@ export class WebGpuEdgeLayer {
             height
         } = this.pending;
         const maximum = this.device.limits.maxTextureDimension2D;
-        const canvasWidth = Math.min(maximum, Math.max(1, Math.ceil(width)));
-        const canvasHeight = Math.min(maximum, Math.max(1, Math.ceil(height)));
+        const requestedPixelRatio = Math.min(
+            2,
+            Math.max(1, Number(globalThis.devicePixelRatio) || 1)
+        );
+        const pixelRatio = Math.min(
+            requestedPixelRatio,
+            maximum / Math.max(width, height)
+        );
+        const canvasWidth = Math.min(
+            maximum,
+            Math.max(1, Math.ceil(width * pixelRatio))
+        );
+        const canvasHeight = Math.min(
+            maximum,
+            Math.max(1, Math.ceil(height * pixelRatio))
+        );
         if (this.canvas.width !== canvasWidth) this.canvas.width = canvasWidth;
         if (this.canvas.height !== canvasHeight) this.canvas.height = canvasHeight;
         const vertices = edgeVertices(edges, selectedEdgeId, hoveredEdgeId);
-        this.vertexCount = vertices.length / 6;
+        this.vertexCount = vertices.length / 8;
         if (vertices.byteLength > 0) {
             this.#ensureVertexCapacity(vertices.byteLength);
             this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices);

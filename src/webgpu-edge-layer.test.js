@@ -13,9 +13,12 @@ describe("WebGpuEdgeLayer geometry", () => {
             ]
         }], null, null);
 
-        // Two segment quads, six vertices per quad, six floats per vertex.
+        // Two joined ribbon segments, six vertices per segment, eight floats
+        // per vertex (position, color, signed edge distance, half width).
         expect(vertices).toBeInstanceOf(Float32Array);
-        expect(vertices).toHaveLength(2 * 6 * 6);
+        expect(vertices).toHaveLength(2 * 6 * 8);
         expect([...vertices].every(Number.isFinite)).toBe(true);
+        expect(vertices[6]).toBeGreaterThan(0);
+        expect(vertices[14]).toBeLessThan(0);
     });
 });

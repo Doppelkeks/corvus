@@ -14,6 +14,96 @@
     background-size: 18px 18px;
 }
 
+.node-dock-workspace {
+    position: relative;
+}
+
+.node-workspace-dock {
+    z-index: 8;
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: 34px minmax(0, 1fr);
+    overflow: hidden;
+    border-color: var(--node-editor-line, rgba(255, 255, 255, .1));
+    background: var(--node-editor-panel, #11151a);
+}
+
+.node-workspace-dock[hidden] {
+    display: none;
+}
+
+.node-dock-tabs {
+    display: flex;
+    min-width: 0;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
+    scrollbar-width: none;
+}
+
+.node-dock-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.node-dock-tab {
+    min-width: max-content;
+    border: 0;
+    border-right: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--node-editor-muted, #758087);
+    padding: 0 14px;
+    font: 700 8px/1 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.node-dock-tab[aria-selected="true"] {
+    border-bottom-color: var(--node-editor-accent, #b8f36b);
+    color: var(--node-editor-text, #cad0d4);
+    background: rgba(255, 255, 255, .025);
+}
+
+.node-dock-content {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.node-workspace-panel-docked {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.node-workspace-panel-floating {
+    position: absolute !important;
+    border: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+}
+
+.node-dock-location {
+    width: 78px;
+    height: 23px;
+    margin-left: auto;
+    border: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
+    border-radius: 4px;
+    background: rgba(0, 0, 0, .2);
+    color: var(--node-editor-muted, #758087);
+    padding: 0 4px;
+    font: 7px/1 ui-sans-serif, system-ui, sans-serif;
+    cursor: pointer;
+}
+
+.node-workspace-panel-docked .node-workspace-resize-handle {
+    display: none;
+}
+
 .node-editor-viewport {
     position: absolute;
     inset: 0;

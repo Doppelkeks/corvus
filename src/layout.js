@@ -57,6 +57,21 @@ export function layoutNodeEditorModel(model, {
         return depth;
     };
     model.nodes.forEach((node) => depthOf(node.id));
+    const maximumOperationDepth = model.nodes.reduce((maximum, node) =>
+        node.terminal
+            ? maximum
+            : Math.max(maximum, depthById.get(node.id) ?? 0), 0);
+    model.nodes.forEach((node) => {
+        if (node.terminal) {
+            depthById.set(
+                node.id,
+                Math.max(
+                    depthById.get(node.id) ?? 0,
+                    maximumOperationDepth + 1
+                )
+            );
+        }
+    });
 
     const columns = new Map();
     model.nodes.forEach((node) => {

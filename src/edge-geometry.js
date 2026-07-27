@@ -6,11 +6,20 @@ export function cubicControls(from, to) {
     });
 }
 
-export function sampleCubicEdge(from, to, segments = 24) {
+export function sampleCubicEdge(from, to, segments = null) {
     const controls = cubicControls(from, to);
+    const segmentCount = Number.isFinite(segments)
+        ? Math.max(1, Math.floor(segments))
+        : Math.max(
+            24,
+            Math.min(
+                64,
+                Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 12)
+            )
+        );
     const points = [];
-    for (let index = 0; index <= segments; index += 1) {
-        const t = index / segments;
+    for (let index = 0; index <= segmentCount; index += 1) {
+        const t = index / segmentCount;
         const inverse = 1 - t;
         points.push(Object.freeze({
             x: inverse ** 3 * from.x

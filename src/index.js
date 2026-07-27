@@ -21,3 +21,8 @@ export {
     PanelLayoutController,
     createPanelLayoutController
 } from "./panel-layout.js";
+export {
+    DockLayoutController,
+    createDockLayoutController,
+    normalizeDockLayout
+} from "./dock-layout.js";
