@@ -7,6 +7,14 @@ export {
     layoutNodeEditorModel
 } from "./layout.js";
 export {
+    clampGraphZoom,
+    DEFAULT_GRAPH_VIEW,
+    GRAPH_ZOOM_RANGE,
+    normalizeGraphView,
+    screenToGraphPoint,
+    zoomGraphViewAt
+} from "./graph-camera.js";
+export {
     cubicControls,
     distanceToSegment,
     hitTestEdges,

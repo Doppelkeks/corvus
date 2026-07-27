@@ -1,4 +1,9 @@
 import { hitTestEdges } from "./edge-geometry.js";
+import {
+    normalizeGraphView,
+    screenToGraphPoint,
+    zoomGraphViewAt
+} from "./graph-camera.js";
 import { GraphWorkerClient } from "./graph-worker-client.js";
 import { normalizeNodeEditorModel } from "./model.js";
 import { WebGpuGraphSurface } from "./webgpu-graph-surface.js";
@@ -8,10 +13,6 @@ function element(tag, className = "", text = null) {
     if (className) node.className = className;
     if (text !== null) node.textContent = text;
     return node;
-}
-
-function clampZoom(value) {
-    return Math.max(0.35, Math.min(2.5, value));
 }
 
 function finitePosition(position) {
@@ -67,7 +68,7 @@ export class NodeEditor {
         this.selectedEdgeId = null;
         this.hoveredEdgeId = null;
         this.selectedPort = null;
-        this.view = { zoom: 1, scrollLeft: 0, scrollTop: 0 };
+        this.view = normalizeGraphView();
         this.prepareRevision = 0;
         this.drag = null;
         this.destroyed = false;
@@ -188,14 +189,7 @@ export class NodeEditor {
             });
         }
         if (viewState) {
-            this.view = {
-                zoom: clampZoom(Number(viewState.zoom) || 1),
-                scrollLeft: Math.max(
-                    0,
-                    Number(viewState.scrollLeft) || 0
-                ),
-                scrollTop: Math.max(0, Number(viewState.scrollTop) || 0)
-            };
+            this.view = normalizeGraphView(viewState, this.view);
         }
         this.surface.setView(this.view);
         this.#syncInteraction();
@@ -237,18 +231,10 @@ export class NodeEditor {
 
     #graphPoint(event) {
         const rect = this.canvas.getBoundingClientRect();
-        return {
-            x: (
-                this.view.scrollLeft
-                + event.clientX
-                - rect.left
-            ) / this.view.zoom,
-            y: (
-                this.view.scrollTop
-                + event.clientY
-                - rect.top
-            ) / this.view.zoom
-        };
+        return screenToGraphPoint(this.view, {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
+        });
     }
 
     #liveNode(index) {
@@ -323,18 +309,11 @@ export class NodeEditor {
                 x: event.clientX - rect.left,
                 y: event.clientY - rect.top
             };
-            const graphPoint = {
-                x: (this.view.scrollLeft + local.x) / this.view.zoom,
-                y: (this.view.scrollTop + local.y) / this.view.zoom
-            };
-            const zoom = clampZoom(
-                this.view.zoom + (event.deltaY < 0 ? 0.1 : -0.1)
-            );
-            this.setView({
-                zoom,
-                scrollLeft: graphPoint.x * zoom - local.x,
-                scrollTop: graphPoint.y * zoom - local.y
-            });
+            this.setView(zoomGraphViewAt(
+                this.view,
+                this.view.zoom + (event.deltaY < 0 ? 0.1 : -0.1),
+                local
+            ));
             return;
         }
         this.setView({
@@ -417,16 +396,10 @@ export class NodeEditor {
                 return;
             }
             const position = {
-                x: Math.max(
-                    12,
-                    this.drag.x
-                        + (event.clientX - this.drag.clientX) / this.view.zoom
-                ),
-                y: Math.max(
-                    12,
-                    this.drag.y
-                        + (event.clientY - this.drag.clientY) / this.view.zoom
-                )
+                x: this.drag.x
+                    + (event.clientX - this.drag.clientX) / this.view.zoom,
+                y: this.drag.y
+                    + (event.clientY - this.drag.clientY) / this.view.zoom
             };
             this.positions.set(this.drag.nodeId, position);
             this.surface.setNodePosition(this.drag.nodeId, position);
@@ -552,11 +525,7 @@ export class NodeEditor {
     }
 
     setView(view) {
-        this.view = {
-            zoom: clampZoom(Number(view.zoom) || this.view.zoom),
-            scrollLeft: Math.max(0, Number(view.scrollLeft) || 0),
-            scrollTop: Math.max(0, Number(view.scrollTop) || 0)
-        };
+        this.view = normalizeGraphView(view, this.view);
         this.surface.setView(this.view);
         this.callbacks.onViewChange?.(this.getView());
     }
