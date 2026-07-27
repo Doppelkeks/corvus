@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
     DockLayoutController,
@@ -9,6 +11,9 @@ const panels = [
     { id: "inspector", defaultDock: "right" },
     { id: "preview", defaultDock: "right" }
 ];
+const controllerSource = readFileSync(fileURLToPath(
+    new URL("./dock-layout.js", import.meta.url)
+), "utf8");
 
 describe("normalizeDockLayout", () => {
     it("creates deterministic dock tabs from panel defaults", () => {
@@ -51,5 +56,12 @@ describe("normalizeDockLayout", () => {
     it("exposes a shared panel focus operation for selection-driven tools", () => {
         expect(typeof DockLayoutController.prototype.focusPanel)
             .toBe("function");
+    });
+
+    it("does not expose location selectors in the controller contract", () => {
+        expect(controllerSource).not.toContain('document.createElement("select")');
+        expect(controllerSource).not.toContain("node-dock-location");
+        expect(controllerSource).toContain("DockDropOverlay");
+        expect(controllerSource).toContain('addEventListener("pointerdown"');
     });
 });

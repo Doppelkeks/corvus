@@ -1,4 +1,8 @@
+import { DockDropOverlay } from "./dock-drop-overlay.js";
+
 const MODES = Object.freeze(["float", "left", "right", "bottom"]);
+const DOCKS = Object.freeze(["left", "right", "bottom"]);
+const DRAG_THRESHOLD = 5;
 
 function finiteRect(value) {
     return Boolean(
@@ -32,19 +36,17 @@ export function normalizeDockLayout(definitions, saved = {}) {
                     : null
         }];
     }));
-    const active = Object.fromEntries(
-        ["left", "right", "bottom"].map((dock) => {
-            const candidates = definitions.filter((definition) =>
-                panels[definition.id].mode === dock);
-            const savedId = saved?.active?.[dock];
-            return [
-                dock,
-                candidates.some((entry) => entry.id === savedId)
-                    ? savedId
-                    : candidates[0]?.id ?? null
-            ];
-        })
-    );
+    const active = Object.fromEntries(DOCKS.map((dock) => {
+        const candidates = definitions.filter((definition) =>
+            panels[definition.id].mode === dock);
+        const savedId = saved?.active?.[dock];
+        return [
+            dock,
+            candidates.some((entry) => entry.id === savedId)
+                ? savedId
+                : candidates[0]?.id ?? null
+        ];
+    }));
     return Object.freeze({
         version: 1,
         panels: Object.freeze(panels),
@@ -77,6 +79,7 @@ export class DockLayoutController {
         this.entries = new Map();
         this.docks = new Map();
         this.zIndex = 30;
+        this.cancelDrag = null;
         this.state = normalizeDockLayout(panels, readSaved(storageKey));
         this.defaultState = normalizeDockLayout(panels);
         this.active = { ...this.state.active };
@@ -85,12 +88,13 @@ export class DockLayoutController {
             const id = element.dataset.dockId;
             const tabs = element.querySelector("[data-dock-tabs]");
             const content = element.querySelector("[data-dock-content]");
-            if (MODES.includes(id) && id !== "float" && tabs && content) {
+            if (DOCKS.includes(id) && tabs && content) {
                 this.docks.set(id, { id, element, tabs, content });
             }
         });
         panels.forEach((definition) => this.#add(definition));
         this.#renderAllDocks();
+        this.dropOverlay = new DockDropOverlay(container);
         this.resizeObserver = new ResizeObserver(() => this.#clampFloats());
         this.resizeObserver.observe(container);
     }
@@ -105,24 +109,11 @@ export class DockLayoutController {
             minHeight = 180
         } = definition;
         if (!id || !(element instanceof Element) || !(handle instanceof Element)) {
-            throw new Error("Dock panel definitions require id, element, and drag handle");
+            throw new Error(
+                "Dock panel definitions require id, element, and drag handle"
+            );
         }
         const originalParent = element.parentElement;
-        const selector = document.createElement("select");
-        selector.className = "node-dock-location";
-        selector.setAttribute("aria-label", `${label} panel location`);
-        [
-            ["left", "Dock left"],
-            ["right", "Dock right"],
-            ["bottom", "Dock bottom"],
-            ["float", "Float panel"]
-        ].forEach(([value, text]) => {
-            const option = document.createElement("option");
-            option.value = value;
-            option.textContent = text;
-            selector.append(option);
-        });
-        handle.append(selector);
         const resizeHandle = document.createElement("button");
         resizeHandle.type = "button";
         resizeHandle.className = "node-workspace-resize-handle";
@@ -130,43 +121,45 @@ export class DockLayoutController {
         element.append(resizeHandle);
         element.classList.add("node-workspace-panel");
         element.dataset.panelId = id;
+        handle.setAttribute(
+            "aria-label",
+            `${label} panel. Drag to move or dock.`
+        );
         const stored = this.state.panels[id];
         const entry = {
             id,
             label,
             element,
             handle,
-            selector,
             resizeHandle,
             originalParent,
+            defaultDock: normalizeMode(definition.defaultDock, "right"),
             minWidth,
             minHeight,
             mode: stored.mode,
             rect: stored.rect,
+            suppressClick: false,
             cleanup: []
         };
         this.entries.set(id, entry);
-        const selectMode = () => this.setMode(id, selector.value);
-        const beginMove = (event) => this.#beginPointerDrag(event, entry, "move");
-        const beginResize = (event) =>
-            this.#beginPointerDrag(event, entry, "resize");
+        const beginMove = (event) => this.#beginDockDrag(event, entry);
+        const beginResize = (event) => this.#beginResize(event, entry);
         const focus = () => this.bringToFront(id);
         const keydown = (event) => this.#handleKeydown(event, entry);
         const toggleFloat = (event) => {
-            if (!event.target.closest("select, button, input, a")) {
-                this.setMode(id, entry.mode === "float"
-                    ? normalizeMode(definition.defaultDock, "right")
-                    : "float");
+            if (!event.target.closest("button, input, select, textarea, a")) {
+                this.setMode(
+                    id,
+                    entry.mode === "float" ? entry.defaultDock : "float"
+                );
             }
         };
-        selector.addEventListener("change", selectMode);
         handle.addEventListener("pointerdown", beginMove);
         handle.addEventListener("dblclick", toggleFloat);
         handle.addEventListener("keydown", keydown);
         resizeHandle.addEventListener("pointerdown", beginResize);
         element.addEventListener("pointerdown", focus);
         entry.cleanup.push(
-            () => selector.removeEventListener("change", selectMode),
             () => handle.removeEventListener("pointerdown", beginMove),
             () => handle.removeEventListener("dblclick", toggleFloat),
             () => handle.removeEventListener("keydown", keydown),
@@ -177,6 +170,17 @@ export class DockLayoutController {
     }
 
     #handleKeydown(event, entry) {
+        const dockShortcuts = {
+            ArrowLeft: "left",
+            ArrowRight: "right",
+            ArrowDown: "bottom",
+            ArrowUp: "float"
+        };
+        if (event.altKey && dockShortcuts[event.key]) {
+            event.preventDefault();
+            this.setMode(entry.id, dockShortcuts[event.key]);
+            return;
+        }
         if (entry.mode !== "float") return;
         const directions = {
             ArrowLeft: [-16, 0],
@@ -260,7 +264,6 @@ export class DockLayoutController {
     }
 
     #place(entry, { persist = true } = {}) {
-        entry.selector.value = entry.mode;
         entry.element.classList.toggle(
             "node-workspace-panel-floating",
             entry.mode === "float"
@@ -313,24 +316,162 @@ export class DockLayoutController {
                 const tab = document.createElement("button");
                 tab.type = "button";
                 tab.className = "node-dock-tab";
+                tab.dataset.panelId = entry.id;
                 tab.textContent = entry.label;
+                tab.title = `Drag ${entry.label} to move or dock`;
                 tab.setAttribute("role", "tab");
                 tab.setAttribute("aria-selected", String(active));
-                tab.addEventListener("click", () =>
-                    this.activate(dock.id, entry.id));
+                tab.addEventListener("pointerdown", (event) =>
+                    this.#beginDockDrag(event, entry, { fromTab: true }));
+                tab.addEventListener("click", (event) => {
+                    if (entry.suppressClick) {
+                        event.preventDefault();
+                        entry.suppressClick = false;
+                        return;
+                    }
+                    this.activate(dock.id, entry.id);
+                });
+                tab.addEventListener("dblclick", () =>
+                    this.setMode(entry.id, "float"));
                 dock.tabs.append(tab);
             }
         }
     }
 
-    #beginPointerDrag(event, entry, mode) {
-        if (entry.mode !== "float" || event.button !== 0) return;
+    #dragRect(entry) {
+        if (entry.mode === "float") {
+            return { ...(entry.rect ?? this.#defaultRect(entry)) };
+        }
+        const dock = this.docks.get(entry.mode);
+        const source = entry.element.hidden
+            ? dock?.content
+            : entry.element;
+        const sourceRect = source?.getBoundingClientRect();
+        const containerRect = this.container.getBoundingClientRect();
+        const fallback = entry.rect ?? this.#defaultRect(entry);
+        const width = clamp(
+            fallback.width,
+            entry.minWidth,
+            Math.max(entry.minWidth, this.container.clientWidth - 24)
+        );
+        const height = clamp(
+            fallback.height,
+            entry.minHeight,
+            Math.max(entry.minHeight, this.container.clientHeight - 24)
+        );
+        return {
+            x: clamp(
+                (sourceRect?.left ?? containerRect.left) - containerRect.left,
+                0,
+                Math.max(0, this.container.clientWidth - width)
+            ),
+            y: clamp(
+                (sourceRect?.top ?? containerRect.top) - containerRect.top,
+                0,
+                Math.max(0, this.container.clientHeight - height)
+            ),
+            width,
+            height
+        };
+    }
+
+    #beginDockDrag(event, entry, { fromTab = false } = {}) {
+        if (event.button !== 0) return;
         if (
-            event.target.closest("button, input, select, textarea, a")
-            && event.target !== entry.resizeHandle
+            !fromTab
+            && event.target.closest("button, input, select, textarea, a")
         ) {
             return;
         }
+        event.preventDefault();
+        event.stopPropagation();
+        this.cancelDrag?.();
+        if (entry.mode === "float") this.bringToFront(entry.id);
+        const target = event.currentTarget;
+        const start = {
+            x: event.clientX,
+            y: event.clientY,
+            rect: this.#dragRect(entry)
+        };
+        let dragging = false;
+        let ghostRect = { ...start.rect };
+        let dropMode = null;
+
+        const cleanup = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", finish);
+            window.removeEventListener("pointercancel", finish);
+            target.classList.remove("dragging");
+            target.removeAttribute("aria-grabbed");
+            entry.element.classList.remove("dock-drag-source");
+            this.container.classList.remove("node-dock-dragging");
+            this.dropOverlay.hide();
+            this.cancelDrag = null;
+        };
+        const move = (moveEvent) => {
+            if (moveEvent.pointerId !== event.pointerId) return;
+            const dx = moveEvent.clientX - start.x;
+            const dy = moveEvent.clientY - start.y;
+            if (!dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+            if (!dragging) {
+                dragging = true;
+                entry.suppressClick = fromTab;
+                target.classList.add("dragging");
+                target.setAttribute("aria-grabbed", "true");
+                entry.element.classList.add("dock-drag-source");
+                this.container.classList.add("node-dock-dragging");
+                this.dropOverlay.show(entry.label, start.rect);
+            }
+            ghostRect = {
+                ...start.rect,
+                x: start.rect.x + dx,
+                y: start.rect.y + dy
+            };
+            this.dropOverlay.setGhostRect(ghostRect);
+            dropMode = this.dropOverlay.targetAt(
+                moveEvent.clientX,
+                moveEvent.clientY
+            );
+            this.dropOverlay.setActive(dropMode);
+        };
+        const finish = (upEvent) => {
+            if (upEvent.pointerId !== event.pointerId) return;
+            const cancelled = upEvent.type === "pointercancel";
+            cleanup();
+            if (!dragging || cancelled) {
+                entry.suppressClick = false;
+                return;
+            }
+            if (fromTab) {
+                window.setTimeout(() => {
+                    entry.suppressClick = false;
+                });
+            }
+            if (dropMode && dropMode !== "float") {
+                if (entry.mode === dropMode) {
+                    this.activate(dropMode, entry.id);
+                } else {
+                    this.setMode(entry.id, dropMode);
+                }
+                return;
+            }
+            entry.rect = ghostRect;
+            if (entry.mode === "float") {
+                this.#applyFloatRect(entry);
+                this.bringToFront(entry.id);
+                this.#persist();
+            } else {
+                this.setMode(entry.id, "float");
+            }
+        };
+        this.cancelDrag = cleanup;
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
+    }
+
+    #beginResize(event, entry) {
+        if (entry.mode !== "float" || event.button !== 0) return;
         event.preventDefault();
         event.stopPropagation();
         this.bringToFront(entry.id);
@@ -339,33 +480,27 @@ export class DockLayoutController {
             y: event.clientY,
             rect: { ...(entry.rect ?? this.#defaultRect(entry)) }
         };
-        const target = mode === "move" ? entry.handle : entry.resizeHandle;
+        const target = entry.resizeHandle;
         target.setPointerCapture(event.pointerId);
-        entry.element.classList.add(mode === "move" ? "moving" : "resizing");
+        entry.element.classList.add("resizing");
         const move = (moveEvent) => {
-            const dx = moveEvent.clientX - start.x;
-            const dy = moveEvent.clientY - start.y;
-            entry.rect = mode === "move"
-                ? {
-                    ...start.rect,
-                    x: start.rect.x + dx,
-                    y: start.rect.y + dy
-                }
-                : {
-                    ...start.rect,
-                    width: start.rect.width + dx,
-                    height: start.rect.height + dy
-                };
+            if (moveEvent.pointerId !== event.pointerId) return;
+            entry.rect = {
+                ...start.rect,
+                width: start.rect.width + moveEvent.clientX - start.x,
+                height: start.rect.height + moveEvent.clientY - start.y
+            };
             this.#applyFloatRect(entry);
         };
         const finish = (upEvent) => {
+            if (upEvent.pointerId !== event.pointerId) return;
             if (target.hasPointerCapture(upEvent.pointerId)) {
                 target.releasePointerCapture(upEvent.pointerId);
             }
             target.removeEventListener("pointermove", move);
             target.removeEventListener("pointerup", finish);
             target.removeEventListener("pointercancel", finish);
-            entry.element.classList.remove("moving", "resizing");
+            entry.element.classList.remove("resizing");
             this.#persist();
         };
         target.addEventListener("pointermove", move);
@@ -410,7 +545,11 @@ export class DockLayoutController {
     setMode(id, mode) {
         const entry = this.entries.get(id);
         const nextMode = normalizeMode(mode);
-        if (!entry || nextMode === entry.mode) return;
+        if (!entry) return;
+        if (nextMode === entry.mode) {
+            if (nextMode !== "float") this.activate(nextMode, id);
+            return;
+        }
         entry.mode = nextMode;
         if (nextMode !== "float") this.active[nextMode] = id;
         this.#place(entry);
@@ -437,6 +576,7 @@ export class DockLayoutController {
     }
 
     reset() {
+        this.cancelDrag?.();
         const state = this.defaultState;
         this.active = { ...state.active };
         for (const entry of this.entries.values()) {
@@ -449,21 +589,27 @@ export class DockLayoutController {
     }
 
     destroy() {
+        this.cancelDrag?.();
         this.resizeObserver.disconnect();
+        this.dropOverlay.destroy();
         for (const entry of this.entries.values()) {
             entry.cleanup.forEach((cleanup) => cleanup());
-            entry.selector.remove();
             entry.resizeHandle.remove();
             entry.originalParent?.append(entry.element);
             entry.element.hidden = false;
             entry.element.classList.remove(
                 "node-workspace-panel",
                 "node-workspace-panel-floating",
-                "node-workspace-panel-docked"
+                "node-workspace-panel-docked",
+                "dock-drag-source"
             );
+            entry.element.removeAttribute("data-panel-id");
         }
         this.entries.clear();
-        this.container.classList.remove("node-dock-workspace");
+        this.container.classList.remove(
+            "node-dock-workspace",
+            "node-dock-dragging"
+        );
     }
 }
 

@@ -101,23 +101,42 @@ If no `gpuDevice` is supplied, the editor requests a high-performance WebGPU
 device. Applications with an existing GPU runtime should lend that device so
 the graph and application use separate pipelines on one device.
 
-## Floating panels
+## Dockable workspace panels
 
 ```js
-import { createPanelLayoutController } from "@echo/node-editor";
+import { createDockLayoutController } from "@echo/node-editor";
 
-const panels = createPanelLayoutController(workspace, {
+const panels = createDockLayoutController(workspace, {
   storageKey: "my-app.workspace.v1",
   panels: [
-    { id: "library", element: libraryPanel },
-    { id: "inspector", element: inspectorPanel }
+    {
+      id: "library",
+      label: "Node library",
+      element: libraryPanel,
+      defaultDock: "left",
+      floatRect: { x: 16, y: 64, width: 360, height: 560 }
+    },
+    {
+      id: "inspector",
+      label: "Inspector",
+      element: inspectorPanel,
+      defaultDock: "right"
+    }
   ]
 });
 ```
 
-Each element needs a descendant marked with `data-panel-drag-handle`.
-Panels can be dragged, resized from the lower-right corner, moved with arrow
-keys, resized with Shift + arrow keys, and reset with `reset()`.
+The workspace provides `left`, `right`, and `bottom` elements marked with
+`data-dock-id`; each contains `data-dock-tabs` and `data-dock-content`.
+Every panel needs a descendant marked with `data-panel-drag-handle`.
+
+Drag a dock tab or a floating panel header to reveal visual docking zones.
+Dropping on an edge docks the panel; dropping in the center or outside a zone
+floats it. Double-clicking a dock tab also floats it. `Alt` plus an arrow key
+docks left, right, bottom, or floats (up). Floating panels can be moved with
+arrow keys, resized with Shift plus arrow keys or from the lower-right handle,
+and restored with `reset()`. Layout and active tabs are persisted under
+`storageKey`; hosts do not need to build or maintain location selectors.
 
 ## Headless utilities
 
