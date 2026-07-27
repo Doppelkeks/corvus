@@ -1,0 +1,14 @@
+{
+  "name": "@echo/node-editor",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./styles.css": "./src/styles.css"
+  },
+  "description": "Use-case-agnostic, WebGPU-accelerated node editor framework.",
+  "sideEffects": [
+    "./src/styles.css"
+  ]
+}

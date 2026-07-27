@@ -1,0 +1,60 @@
+import { describe, expect, it } from "vitest";
+import { layoutNodeEditorModel } from "./layout.js";
+import { normalizeNodeEditorModel } from "./model.js";
+
+function model() {
+    return normalizeNodeEditorModel({
+        id: "layout-test",
+        nodes: [
+            { id: "a", inputs: [], outputs: [{ id: "out" }] },
+            { id: "b", inputs: [], outputs: [{ id: "out" }] },
+            {
+                id: "c",
+                inputs: [{ id: "first" }, { id: "second" }],
+                outputs: []
+            }
+        ],
+        edges: [
+            {
+                from: { nodeId: "a", port: "out" },
+                to: { nodeId: "c", port: "first" }
+            },
+            {
+                from: { nodeId: "b", port: "out" },
+                to: { nodeId: "c", port: "second" }
+            }
+        ]
+    });
+}
+
+describe("layoutNodeEditorModel", () => {
+    it("places dependencies in deterministic columns", () => {
+        const layout = layoutNodeEditorModel(model());
+        const byId = new Map(layout.nodes.map((node) => [node.nodeId, node]));
+        expect(byId.get("a").x).toBe(byId.get("b").x);
+        expect(byId.get("c").x).toBeGreaterThan(byId.get("a").x);
+        expect(byId.get("b").y).toBeGreaterThan(byId.get("a").y);
+    });
+
+    it("does not let a manual position reorganize automatic siblings", () => {
+        const baseline = layoutNodeEditorModel(model());
+        const moved = layoutNodeEditorModel(model(), {
+            positions: { a: { x: 900, y: 700 } }
+        });
+        const baselineById = new Map(
+            baseline.nodes.map((node) => [node.nodeId, node])
+        );
+        const movedById = new Map(
+            moved.nodes.map((node) => [node.nodeId, node])
+        );
+        expect(movedById.get("a")).toMatchObject({ x: 900, y: 700 });
+        expect(movedById.get("b")).toMatchObject({
+            x: baselineById.get("b").x,
+            y: baselineById.get("b").y
+        });
+        expect(movedById.get("c")).toMatchObject({
+            x: baselineById.get("c").x,
+            y: baselineById.get("c").y
+        });
+    });
+});
