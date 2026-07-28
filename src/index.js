@@ -26,6 +26,18 @@ export {
     selectionRectangle
 } from "./selection-geometry.js";
 export {
+    GRAPH_ANNOTATION_GEOMETRY,
+    GRAPH_ANNOTATION_KINDS,
+    createGraphComment,
+    createGraphCommentSection,
+    graphAnnotationRectangle,
+    moveGraphAnnotation,
+    nodesContainedByCommentSection,
+    normalizeGraphAnnotation,
+    normalizeGraphAnnotations,
+    resizeGraphAnnotation
+} from "./graph-annotations.js";
+export {
     GPU_FONT_LAYOUT,
     gpuGlyphAdvance,
     gpuGlyphOffsetX,

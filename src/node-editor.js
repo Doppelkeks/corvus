@@ -5,6 +5,14 @@ import {
     zoomGraphViewAt
 } from "./graph-camera.js";
 import { GraphWorkerClient } from "./graph-worker-client.js";
+import {
+    GRAPH_ANNOTATION_GEOMETRY,
+    GRAPH_ANNOTATION_KINDS,
+    graphAnnotationRectangle,
+    nodesContainedByCommentSection,
+    normalizeGraphAnnotations,
+    resizeGraphAnnotation
+} from "./graph-annotations.js";
 import { normalizeNodeEditorModel } from "./model.js";
 import { connectionForPorts } from "./port-connection.js";
 import {
@@ -69,14 +77,17 @@ export class NodeEditor {
         this.layout = null;
         this.scene = null;
         this.previewStates = new Map();
+        this.annotations = Object.freeze([]);
         this.selectedNodeId = null;
         this.selectedNodeIds = new Set();
+        this.selectedAnnotationId = null;
         this.selectedEdgeId = null;
         this.hoveredEdgeId = null;
         this.selectedPort = null;
         this.view = normalizeGraphView();
         this.prepareRevision = 0;
         this.drag = null;
+        this.annotationCreationMode = null;
         this.destroyed = false;
         this.cleanup = [];
 
@@ -166,9 +177,11 @@ export class NodeEditor {
 
     update(model, {
         positions = null,
+        annotations = this.annotations,
         viewState = null,
         selectedNodeId = this.selectedNodeId,
         selectedNodeIds = this.selectedNodeIds,
+        selectedAnnotationId = this.selectedAnnotationId,
         selectedEdgeId = this.selectedEdgeId,
         selectedPort = this.selectedPort,
         ...callbacks
@@ -179,11 +192,13 @@ export class NodeEditor {
             this.positions.clear();
             this.selectedNodeId = null;
             this.selectedNodeIds.clear();
+            this.selectedAnnotationId = null;
             this.selectedEdgeId = null;
             this.selectedPort = null;
             this.previewStates.clear();
         }
         this.model = normalized;
+        this.annotations = normalizeGraphAnnotations(annotations);
         this.callbacks = callbacks;
         const requestedNodeIds = selectedNodeIds instanceof Set
             ? [...selectedNodeIds]
@@ -200,8 +215,23 @@ export class NodeEditor {
         this.selectedNodeId = this.selectedNodeIds.has(selectedNodeId)
             ? selectedNodeId
             : [...this.selectedNodeIds][0] ?? null;
-        this.selectedEdgeId = selectedEdgeId;
-        this.selectedPort = selectedPort;
+        this.selectedAnnotationId = this.annotations.some(
+            (annotation) => annotation.id === selectedAnnotationId
+        )
+            ? selectedAnnotationId
+            : null;
+        if (this.selectedAnnotationId) {
+            this.selectedNodeId = null;
+            this.selectedNodeIds.clear();
+            this.selectedEdgeId = null;
+            this.selectedPort = null;
+        }
+        this.selectedEdgeId = this.selectedAnnotationId
+            ? null
+            : selectedEdgeId;
+        this.selectedPort = this.selectedAnnotationId
+            ? null
+            : selectedPort;
         for (const id of [...this.positions.keys()]) {
             if (!liveIds.has(id)) this.positions.delete(id);
         }
@@ -230,7 +260,10 @@ export class NodeEditor {
             model: this.model,
             positions: positionObject(this.positions),
             layoutOptions: this.layoutOptions,
-            sceneOptions: this.layoutOptions
+            sceneOptions: {
+                ...this.layoutOptions,
+                annotations: this.annotations
+            }
         });
         await this.ready;
         if (revision !== this.prepareRevision || this.destroyed) return null;
@@ -248,7 +281,7 @@ export class NodeEditor {
         this.surface.setView(this.view);
         this.surface.setPreviewTextures(this.previewStates);
         this.selectionStatus.textContent =
-            `${this.model.nodes.length} nodes · ${this.model.edges.length} connections · accelerated rendering`;
+            `${this.model.nodes.length} nodes · ${this.model.edges.length} connections · ${this.annotations.length} notes · accelerated rendering`;
         this.#syncInteraction();
         if (notifyPositions) {
             this.callbacks.onPositionsChange?.(this.getPositions());
@@ -340,6 +373,60 @@ export class NodeEditor {
             candidates,
             point,
             tolerance / this.view.zoom
+        );
+    }
+
+    #annotationAt(point) {
+        if (!this.scene?.hitAnnotations) return null;
+        const border = 8 / this.view.zoom;
+        for (
+            let index = this.scene.hitAnnotations.length - 1;
+            index >= 0;
+            index -= 1
+        ) {
+            const annotation = this.scene.hitAnnotations[index];
+            const right = annotation.x + annotation.width;
+            const bottom = annotation.y + annotation.height;
+            if (
+                point.x < annotation.x - border
+                || point.x > right + border
+                || point.y < annotation.y - border
+                || point.y > bottom + border
+            ) {
+                continue;
+            }
+            const resize = annotation.resizeHandleSize > 0
+                && point.x >= right
+                    - annotation.resizeHandleSize
+                    - border
+                && point.y >= bottom
+                    - annotation.resizeHandleSize
+                    - border;
+            if (resize) return { annotation, region: "resize" };
+            if (annotation.kind === GRAPH_ANNOTATION_KINDS.comment) {
+                return { annotation, region: "body" };
+            }
+            const header = point.y <= annotation.y + annotation.headerHeight;
+            const onBorder = point.x <= annotation.x + border
+                || point.x >= right - border
+                || point.y <= annotation.y + border
+                || point.y >= bottom - border;
+            if (header || onBorder) {
+                return {
+                    annotation,
+                    region: header ? "header" : "border"
+                };
+            }
+        }
+        return null;
+    }
+
+    #replaceAnnotation(nextAnnotation) {
+        this.annotations = normalizeGraphAnnotations(
+            this.annotations.map((annotation) =>
+                annotation.id === nextAnnotation.id
+                    ? nextAnnotation
+                    : annotation)
         );
     }
 
@@ -459,9 +546,73 @@ export class NodeEditor {
             }
             return;
         }
+        const annotationHit = this.#annotationAt(point);
+        if (annotationHit) {
+            const { annotation, region } = annotationHit;
+            this.selectAnnotation(annotation.id);
+            const startingPositions = {};
+            if (annotation.kind === GRAPH_ANNOTATION_KINDS.section) {
+                const containedNodeIds = nodesContainedByCommentSection(
+                    annotation,
+                    this.#liveNodes()
+                );
+                containedNodeIds.forEach((nodeId) => {
+                    const index = this.scene.nodeIndexById[nodeId];
+                    if (!Number.isInteger(index)) return;
+                    const liveNode = this.#liveNode(index);
+                    startingPositions[nodeId] = {
+                        x: liveNode.x,
+                        y: liveNode.y
+                    };
+                });
+            }
+            this.drag = {
+                kind: region === "resize"
+                    ? "annotation-resize"
+                    : "annotation",
+                pointerId,
+                annotationId: annotation.id,
+                start: point,
+                current: point,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                startingAnnotation: { ...annotation },
+                startingPositions
+            };
+            this.viewport.classList.add(
+                region === "resize"
+                    ? "resizing-annotation"
+                    : "dragging-annotation"
+            );
+            this.viewport.setPointerCapture(pointerId);
+            return;
+        }
         const edge = this.#edgeAt(point);
         if (edge) {
             this.selectEdge(edge.id);
+            return;
+        }
+        if (
+            this.annotationCreationMode
+            === GRAPH_ANNOTATION_KINDS.section
+        ) {
+            this.drag = {
+                kind: "annotation-create",
+                pointerId,
+                start: point,
+                current: point,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                moved: false
+            };
+            this.selectedNodeId = null;
+            this.selectedNodeIds.clear();
+            this.selectedAnnotationId = null;
+            this.selectedEdgeId = null;
+            this.selectedPort = null;
+            this.viewport.classList.add("creating-annotation");
+            this.viewport.setPointerCapture(pointerId);
+            this.#syncInteraction();
             return;
         }
         const additive = event.shiftKey || event.ctrlKey || event.metaKey;
@@ -478,6 +629,7 @@ export class NodeEditor {
         if (!additive) {
             this.selectedNodeId = null;
             this.selectedNodeIds.clear();
+            this.selectedAnnotationId = null;
             this.selectedEdgeId = null;
             this.selectedPort = null;
         }
@@ -526,10 +678,53 @@ export class NodeEditor {
                 this.#syncInteraction();
                 return;
             }
+            if (
+                this.drag.kind === "annotation-create"
+                || this.drag.kind === "annotation-resize"
+            ) {
+                const rawPoint = this.#graphPoint(event);
+                const point = this.drag.kind === "annotation-resize"
+                    ? {
+                        x: Math.max(
+                            this.drag.startingAnnotation.x
+                                + GRAPH_ANNOTATION_GEOMETRY[
+                                    this.drag.startingAnnotation.kind
+                                ].minimumWidth,
+                            rawPoint.x
+                        ),
+                        y: Math.max(
+                            this.drag.startingAnnotation.y
+                                + GRAPH_ANNOTATION_GEOMETRY[
+                                    this.drag.startingAnnotation.kind
+                                ].minimumHeight,
+                            rawPoint.y
+                        )
+                    }
+                    : rawPoint;
+                this.drag.current = point;
+                this.drag.moved ||= Math.hypot(
+                    event.clientX - this.drag.clientX,
+                    event.clientY - this.drag.clientY
+                ) >= 3;
+                this.#syncInteraction();
+                return;
+            }
             const delta = {
                 x: (event.clientX - this.drag.clientX) / this.view.zoom,
                 y: (event.clientY - this.drag.clientY) / this.view.zoom
             };
+            if (this.drag.kind === "annotation") {
+                const annotation = {
+                    ...this.drag.startingAnnotation,
+                    x: this.drag.startingAnnotation.x + delta.x,
+                    y: this.drag.startingAnnotation.y + delta.y
+                };
+                this.#replaceAnnotation(annotation);
+                this.surface.setNodePosition(
+                    this.drag.annotationId,
+                    annotation
+                );
+            }
             Object.entries(this.drag.startingPositions).forEach(
                 ([nodeId, start]) => {
                     const position = {
@@ -545,12 +740,21 @@ export class NodeEditor {
         const point = this.#graphPoint(event);
         const port = this.#portAt(point);
         const node = port ? port.node : this.#nodeAt(point);
+        const annotation = node ? null : this.#annotationAt(point);
         this.viewport.classList.toggle("port-hovered", Boolean(port));
         this.viewport.classList.toggle(
             "node-header-hovered",
             Boolean(node && point.y - node.y <= node.headerHeight)
         );
-        const edge = node ? null : this.#edgeAt(point, 7);
+        this.viewport.classList.toggle(
+            "annotation-hovered",
+            Boolean(annotation)
+        );
+        this.viewport.classList.toggle(
+            "annotation-resize-hovered",
+            annotation?.region === "resize"
+        );
+        const edge = node || annotation ? null : this.#edgeAt(point, 7);
         const id = edge?.id ?? null;
         if (id === this.hoveredEdgeId) return;
         this.hoveredEdgeId = id;
@@ -568,6 +772,9 @@ export class NodeEditor {
         this.viewport.classList.remove(
             "panning",
             "dragging-node",
+            "dragging-annotation",
+            "resizing-annotation",
+            "creating-annotation",
             "connecting-port",
             "selecting-nodes"
         );
@@ -586,6 +793,71 @@ export class NodeEditor {
             }
             this.callbacks.onPositionsChange?.(this.getPositions());
             this.prepared = this.#prepareScene();
+            return;
+        }
+        if (drag.kind === "annotation") {
+            this.callbacks.onAnnotationsChange?.(
+                this.getAnnotations(),
+                {
+                    kind: "move",
+                    annotationId: drag.annotationId,
+                    positions: this.getPositions()
+                }
+            );
+            this.prepared = this.#prepareScene();
+            return;
+        }
+        if (drag.kind === "annotation-resize") {
+            const annotation = resizeGraphAnnotation(
+                drag.startingAnnotation,
+                {
+                    left: drag.startingAnnotation.x,
+                    top: drag.startingAnnotation.y,
+                    right: drag.current.x,
+                    bottom: drag.current.y
+                }
+            );
+            this.#replaceAnnotation(annotation);
+            this.callbacks.onAnnotationsChange?.(
+                this.getAnnotations(),
+                {
+                    kind: "resize",
+                    annotationId: drag.annotationId,
+                    positions: this.getPositions()
+                }
+            );
+            this.prepared = this.#prepareScene();
+            this.#syncInteraction();
+            return;
+        }
+        if (drag.kind === "annotation-create") {
+            const rectangle = selectionRectangle(
+                drag.start,
+                drag.moved
+                    ? drag.current
+                    : {
+                        x: drag.start.x
+                            + GRAPH_ANNOTATION_GEOMETRY.section.width,
+                        y: drag.start.y
+                            + GRAPH_ANNOTATION_GEOMETRY.section.height
+                    }
+            );
+            this.annotationCreationMode = null;
+            this.viewport.classList.remove("creating-comment-section");
+            this.callbacks.onCreateAnnotation?.({
+                kind: GRAPH_ANNOTATION_KINDS.section,
+                x: rectangle.left,
+                y: rectangle.top,
+                width: Math.max(
+                    GRAPH_ANNOTATION_GEOMETRY.section.minimumWidth,
+                    rectangle.width
+                ),
+                height: Math.max(
+                    GRAPH_ANNOTATION_GEOMETRY.section.minimumHeight,
+                    rectangle.height
+                )
+            });
+            this.#syncInteraction();
             return;
         }
         if (drag.kind === "connection") {
@@ -624,6 +896,7 @@ export class NodeEditor {
         if (
             this.#portAt(point)
             || this.#nodeAt(point)
+            || this.#annotationAt(point)
             || this.#edgeAt(point)
         ) {
             return;
@@ -636,11 +909,29 @@ export class NodeEditor {
 
     #handleKeyDown(event) {
         if (event.key === "Escape") {
+            if (this.annotationCreationMode) {
+                this.annotationCreationMode = null;
+                this.viewport.classList.remove("creating-comment-section");
+                this.selectionStatus.textContent =
+                    "Comment section creation cancelled";
+                return;
+            }
             this.clearSelection();
             return;
         }
         if (!["Delete", "Backspace"].includes(event.key)) return;
-        if (this.selectedEdgeId) {
+        if (this.selectedAnnotationId) {
+            event.preventDefault();
+            const annotation = this.annotations.find(
+                (entry) => entry.id === this.selectedAnnotationId
+            );
+            if (annotation) {
+                this.callbacks.onDeleteAnnotation?.(
+                    annotation.id,
+                    annotation
+                );
+            }
+        } else if (this.selectedEdgeId) {
             const edge = this.model.edges.find(
                 (entry) => entry.id === this.selectedEdgeId
             );
@@ -664,6 +955,7 @@ export class NodeEditor {
         this.surface.setInteraction({
             selectedNodeId: this.selectedNodeId,
             selectedNodeIds: [...this.selectedNodeIds],
+            selectedAnnotationId: this.selectedAnnotationId,
             selectedEdgeId: this.selectedEdgeId,
             hoveredEdgeId: this.hoveredEdgeId,
             selectedPort: this.selectedPort,
@@ -673,15 +965,31 @@ export class NodeEditor {
                     point: this.drag.point
                 }
                 : null,
-            selectionRect: this.drag?.kind === "selection"
-                && this.drag.moved
+            selectionRect: (
+                this.drag?.kind === "selection"
+                || this.drag?.kind === "annotation-create"
+            ) && this.drag.moved
                 ? selectionRectangle(this.drag.start, this.drag.current)
-                : null
+                : this.drag?.kind === "annotation-resize"
+                    ? selectionRectangle(
+                        {
+                            x: this.drag.startingAnnotation.x,
+                            y: this.drag.startingAnnotation.y
+                        },
+                        this.drag.current
+                    )
+                    : null
         });
         const edge = this.model?.edges.find(
             (entry) => entry.id === this.selectedEdgeId
         );
-        if (edge) {
+        const annotation = this.annotations.find(
+            (entry) => entry.id === this.selectedAnnotationId
+        );
+        if (annotation) {
+            this.selectionStatus.textContent =
+                `${annotation.title} selected · drag to move · Delete removes`;
+        } else if (edge) {
             const source = this.model.nodes.find(
                 (node) => node.id === edge.from.nodeId
             );
@@ -729,6 +1037,7 @@ export class NodeEditor {
         this.selectedNodeId = this.selectedNodeIds.has(nodeId)
             ? nodeId
             : [...this.selectedNodeIds].at(-1) ?? null;
+        this.selectedAnnotationId = null;
         this.selectedEdgeId = null;
         this.selectedPort = null;
         this.#syncInteraction();
@@ -741,15 +1050,31 @@ export class NodeEditor {
         this.selectedEdgeId = edgeId;
         this.selectedNodeId = null;
         this.selectedNodeIds.clear();
+        this.selectedAnnotationId = null;
         this.selectedPort = null;
         this.#syncInteraction();
         this.callbacks.onSelectEdge?.(edgeId, edge);
+    }
+
+    selectAnnotation(annotationId) {
+        const annotation = this.annotations.find(
+            (entry) => entry.id === annotationId
+        );
+        if (!annotation) return;
+        this.selectedAnnotationId = annotationId;
+        this.selectedNodeId = null;
+        this.selectedNodeIds.clear();
+        this.selectedEdgeId = null;
+        this.selectedPort = null;
+        this.#syncInteraction();
+        this.callbacks.onSelectAnnotation?.(annotationId, annotation);
     }
 
     clearSelection() {
         if (
             !this.selectedNodeId
             && this.selectedNodeIds.size === 0
+            && !this.selectedAnnotationId
             && !this.selectedEdgeId
             && !this.selectedPort
         ) {
@@ -757,6 +1082,7 @@ export class NodeEditor {
         }
         this.selectedNodeId = null;
         this.selectedNodeIds.clear();
+        this.selectedAnnotationId = null;
         this.selectedEdgeId = null;
         this.selectedPort = null;
         this.#syncInteraction();
@@ -767,6 +1093,22 @@ export class NodeEditor {
     autoLayout() {
         this.positions.clear();
         this.prepared = this.#prepareScene({ notifyPositions: true });
+    }
+
+    beginCommentSectionCreation() {
+        this.annotationCreationMode = GRAPH_ANNOTATION_KINDS.section;
+        this.clearSelection();
+        this.viewport.classList.add("creating-comment-section");
+        this.selectionStatus.textContent =
+            "Draw a rectangle on empty graph space to create a comment section";
+        this.viewport.focus({ preventScroll: true });
+    }
+
+    graphViewportCenter() {
+        return screenToGraphPoint(this.view, {
+            x: this.canvas.clientWidth / 2,
+            y: this.canvas.clientHeight / 2
+        });
     }
 
     setView(view) {
@@ -789,6 +1131,12 @@ export class NodeEditor {
 
     getPositions() {
         return Object.freeze(positionObject(this.positions));
+    }
+
+    getAnnotations() {
+        return Object.freeze(this.annotations.map(
+            (annotation) => Object.freeze({ ...annotation })
+        ));
     }
 
     getPreviewTargets() {

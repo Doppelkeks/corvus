@@ -53,6 +53,48 @@ describe("buildGraphScene", () => {
         expect(Object.keys(scene.spatialIndex.cells).length).toBeGreaterThan(0);
     });
 
+    it("packs comments and sections into the WebGPU scene", () => {
+        const model = fixture();
+        const scene = buildGraphScene(
+            model,
+            layoutNodeEditorModel(model),
+            {
+                annotations: [{
+                    id: "note",
+                    kind: "comment",
+                    title: "Review",
+                    text: "Tune contrast",
+                    color: "#e1b643",
+                    x: -300,
+                    y: 20,
+                    width: 240,
+                    height: 92
+                }, {
+                    id: "section",
+                    kind: "section",
+                    title: "Surface",
+                    text: "Shared relief",
+                    color: "#87d61f",
+                    x: -40,
+                    y: -40,
+                    width: 700,
+                    height: 420
+                }]
+            }
+        );
+
+        expect(scene.hitAnnotations).toHaveLength(2);
+        expect(scene.nodeRecords.length / GRAPH_SCENE_STRIDES.node).toBe(4);
+        expect(scene.annotationIndexById).toEqual({
+            note: 2,
+            section: 3
+        });
+        expect(scene.backdropShapeCount).toBeGreaterThan(0);
+        expect(scene.underlayShapeCount).toBeGreaterThan(
+            scene.backdropShapeCount
+        );
+    });
+
     it("keeps output socket and wire anchors on the exact node boundary", () => {
         const model = fixture();
         const layout = layoutNodeEditorModel(model);

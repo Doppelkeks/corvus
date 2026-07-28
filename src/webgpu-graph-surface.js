@@ -68,6 +68,7 @@ export class WebGpuGraphSurface {
         this.interaction = {
             selectedNodeId: null,
             selectedNodeIds: [],
+            selectedAnnotationId: null,
             selectedEdgeId: null,
             hoveredEdgeId: null,
             selectedPort: null,
@@ -463,11 +464,15 @@ export class WebGpuGraphSurface {
     #writeNodeSelection() {
         if (!this.scene || !this.nodeSelectionBuffer) return;
         this.nodeSelection.fill(0);
-        const ids = this.interaction.selectedNodeIds?.length
+        const ids = [...(this.interaction.selectedNodeIds?.length
             ? this.interaction.selectedNodeIds
-            : [this.interaction.selectedNodeId].filter(Boolean);
+            : [this.interaction.selectedNodeId].filter(Boolean))];
+        if (this.interaction.selectedAnnotationId) {
+            ids.push(this.interaction.selectedAnnotationId);
+        }
         ids.forEach((id) => {
-            const index = this.scene.nodeIndexById[id];
+            const index = this.scene.nodeIndexById[id]
+                ?? this.scene.annotationIndexById?.[id];
             if (Number.isInteger(index)) this.nodeSelection[index] = 1;
         });
         this.device.queue.writeBuffer(
@@ -532,7 +537,8 @@ export class WebGpuGraphSurface {
     }
 
     setNodePosition(nodeId, position) {
-        const index = this.scene?.nodeIndexById?.[nodeId];
+        const index = this.scene?.nodeIndexById?.[nodeId]
+            ?? this.scene?.annotationIndexById?.[nodeId];
         if (!Number.isInteger(index)) return;
         const offset = index * 4;
         this.scene.nodeRecords[offset] = position.x;
@@ -656,6 +662,18 @@ export class WebGpuGraphSurface {
         pass.setPipeline(this.gridPipeline);
         pass.setBindGroup(0, this.gridBindGroup);
         pass.draw(3);
+        const backdropShapeCount = Math.max(
+            0,
+            Math.min(
+                shapeCount,
+                this.scene.backdropShapeCount ?? 0
+            )
+        );
+        if (backdropShapeCount > 0) {
+            pass.setPipeline(this.shapePipeline);
+            pass.setBindGroup(0, this.shapeBindGroup);
+            pass.draw(6, backdropShapeCount);
+        }
         if (edgeCount > 0) {
             pass.setPipeline(this.edgePipeline);
             pass.setBindGroup(0, this.edgeBindGroup);
@@ -672,9 +690,18 @@ export class WebGpuGraphSurface {
             )
         );
         if (underlayShapeCount > 0) {
+            const foregroundUnderlayCount =
+                underlayShapeCount - backdropShapeCount;
             pass.setPipeline(this.shapePipeline);
             pass.setBindGroup(0, this.shapeBindGroup);
-            pass.draw(6, underlayShapeCount);
+            if (foregroundUnderlayCount > 0) {
+                pass.draw(
+                    6,
+                    foregroundUnderlayCount,
+                    0,
+                    backdropShapeCount
+                );
+            }
         }
         this.#drawPreviews(pass);
         const overlayShapeCount = shapeCount - underlayShapeCount;
@@ -743,7 +770,8 @@ export class WebGpuGraphSurface {
             backend: this.device ? "webgpu" : "initializing",
             compute: true,
             workerPrepared: true,
-            edgeSegments: edgeCount * EDGE_SEGMENTS
+            edgeSegments: edgeCount * EDGE_SEGMENTS,
+            annotationCount: this.scene?.hitAnnotations?.length ?? 0
         });
     }
 

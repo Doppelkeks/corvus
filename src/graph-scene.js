@@ -10,6 +10,10 @@ import {
     nodePortYPositions,
     nodePreviewRect
 } from "./node-card-geometry.js";
+import {
+    GRAPH_ANNOTATION_GEOMETRY,
+    GRAPH_ANNOTATION_KINDS
+} from "./graph-annotations.js";
 
 export const GRAPH_SCENE_STRIDES = Object.freeze({
     node: 4,
@@ -54,6 +58,37 @@ const TEXT = Object.freeze({
 
 function pushShape(target, rect, fill, border, meta) {
     target.push(...rect, ...fill, ...border, ...meta);
+}
+
+function colorChannels(value, alpha = 1) {
+    const match = /^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(
+        String(value ?? "")
+    );
+    if (!match) return [0.529, 0.839, 0.122, alpha];
+    return [
+        Number.parseInt(match[1], 16) / 255,
+        Number.parseInt(match[2], 16) / 255,
+        Number.parseInt(match[3], 16) / 255,
+        alpha
+    ];
+}
+
+function wrappedLines(value, maximumCharacters, maximumLines = 3) {
+    const words = String(value ?? "").trim().split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+        const candidate = line ? `${line} ${word}` : word;
+        if (candidate.length <= maximumCharacters) {
+            line = candidate;
+            continue;
+        }
+        if (line) lines.push(line);
+        line = word.slice(0, maximumCharacters);
+        if (lines.length === maximumLines) break;
+    }
+    if (line && lines.length < maximumLines) lines.push(line);
+    return lines;
 }
 
 function glyphUv(character) {
@@ -168,9 +203,13 @@ function edgeBounds(points) {
  * layout into tightly packed GPU records plus compact interaction metadata.
  */
 export function buildGraphScene(model, layout, options = {}) {
+    const {
+        annotations = [],
+        ...metricOptions
+    } = options;
     const metrics = Object.freeze({
         ...GRAPH_SCENE_METRICS,
-        ...options
+        ...metricOptions
     });
     const layoutById = new Map(layout.nodes.map((entry) => [
         entry.nodeId,
@@ -181,6 +220,8 @@ export function buildGraphScene(model, layout, options = {}) {
         index
     ]));
     const nodeRecords = [];
+    const backdropShapes = [];
+    const annotationCardShapes = [];
     const underlayShapes = [];
     const selectionShapes = [];
     const overlayShapes = [];
@@ -308,6 +349,98 @@ export function buildGraphScene(model, layout, options = {}) {
         );
     });
 
+    const hitAnnotations = [];
+    const annotationIndexById = {};
+    annotations.forEach((annotation, annotationOffset) => {
+        const transformIndex = model.nodes.length + annotationOffset;
+        const accent = colorChannels(annotation.color);
+        const isSection =
+            annotation.kind === GRAPH_ANNOTATION_KINDS.section;
+        const shapes = isSection ? backdropShapes : annotationCardShapes;
+        annotationIndexById[annotation.id] = transformIndex;
+        nodeRecords.push(
+            annotation.x,
+            annotation.y,
+            annotation.width,
+            annotation.height
+        );
+        pushShape(
+            shapes,
+            [0, 0, annotation.width, annotation.height],
+            isSection
+                ? [accent[0], accent[1], accent[2], 0.045]
+                : [0.055, 0.052, 0.038, 0.96],
+            [accent[0], accent[1], accent[2], isSection ? 0.46 : 0.72],
+            [isSection ? 0 : 4, isSection ? 1.25 : 1, 4, transformIndex]
+        );
+        if (isSection) {
+            pushShape(
+                shapes,
+                [
+                    0,
+                    0,
+                    annotation.width,
+                    GRAPH_ANNOTATION_GEOMETRY.sectionHeaderHeight
+                ],
+                [accent[0], accent[1], accent[2], 0.13],
+                [0, 0, 0, 0],
+                [0, 0, 0, transformIndex]
+            );
+            pushShape(
+                shapes,
+                [
+                    annotation.width
+                        - GRAPH_ANNOTATION_GEOMETRY.resizeHandleSize,
+                    annotation.height
+                        - GRAPH_ANNOTATION_GEOMETRY.resizeHandleSize,
+                    GRAPH_ANNOTATION_GEOMETRY.resizeHandleSize,
+                    GRAPH_ANNOTATION_GEOMETRY.resizeHandleSize
+                ],
+                [accent[0], accent[1], accent[2], 0.38],
+                [accent[0], accent[1], accent[2], 0.92],
+                [0, 1, 0, transformIndex]
+            );
+        } else {
+            pushShape(
+                shapes,
+                [0, 0, 4, annotation.height],
+                accent,
+                accent,
+                [0, 0, 0, transformIndex]
+            );
+        }
+        pushText(glyphs, annotation.title, {
+            x: isSection ? 10 : 14,
+            y: isSection ? 7 : 11,
+            nodeIndex: transformIndex,
+            color: accent,
+            height: isSection ? 14 : 13.5,
+            maximum: isSection ? 44 : 30
+        });
+        wrappedLines(
+            annotation.text,
+            isSection ? 52 : 31,
+            isSection ? 1 : 3
+        ).forEach((line, lineIndex) => pushText(glyphs, line, {
+            x: isSection ? 10 : 14,
+            y: (isSection ? 34 : 35) + lineIndex * 16,
+            nodeIndex: transformIndex,
+            color: TEXT.muted,
+            height: 12,
+            maximum: isSection ? 52 : 31
+        }));
+        hitAnnotations.push(Object.freeze({
+            ...annotation,
+            index: transformIndex,
+            headerHeight: isSection
+                ? GRAPH_ANNOTATION_GEOMETRY.sectionHeaderHeight
+                : annotation.height,
+            resizeHandleSize: isSection
+                ? GRAPH_ANNOTATION_GEOMETRY.resizeHandleSize
+                : 0
+        }));
+    });
+
     const portByKey = new Map();
     hitNodes.forEach((node) => node.ports.forEach((port) =>
         portByKey.set(
@@ -362,8 +495,11 @@ export function buildGraphScene(model, layout, options = {}) {
         );
     });
 
-    const underlayShapeCount =
-        underlayShapes.length / GRAPH_SCENE_STRIDES.shape;
+    const backdropShapeCount =
+        backdropShapes.length / GRAPH_SCENE_STRIDES.shape;
+    const underlayShapeCount = backdropShapeCount
+        + annotationCardShapes.length / GRAPH_SCENE_STRIDES.shape
+        + underlayShapes.length / GRAPH_SCENE_STRIDES.shape;
     const selectionShapeCount =
         selectionShapes.length / GRAPH_SCENE_STRIDES.shape;
     const portShapeIndexByKey = Object.fromEntries(
@@ -373,6 +509,8 @@ export function buildGraphScene(model, layout, options = {}) {
         ])
     );
     const shapes = [
+        ...backdropShapes,
+        ...annotationCardShapes,
         ...underlayShapes,
         ...selectionShapes,
         ...overlayShapes
@@ -381,17 +519,20 @@ export function buildGraphScene(model, layout, options = {}) {
         layout,
         nodeRecords: new Float32Array(nodeRecords),
         shapes: new Float32Array(shapes),
+        backdropShapeCount,
         underlayShapeCount,
         glyphs: new Float32Array(glyphs),
         edges: new Float32Array(edgeRecords),
         previews: new Float32Array(previews),
         hitNodes: Object.freeze(hitNodes),
+        hitAnnotations: Object.freeze(hitAnnotations),
         hitEdges: Object.freeze(hitEdges),
         spatialIndex: Object.freeze({
             cellSize: metrics.spatialCellSize,
             cells: Object.freeze(spatialCells)
         }),
         nodeIndexById: Object.freeze(Object.fromEntries(nodeIndexById)),
+        annotationIndexById: Object.freeze(annotationIndexById),
         edgeIndexById: Object.freeze(Object.fromEntries(
             model.edges.map((edge, index) => [edge.id, index])
         )),

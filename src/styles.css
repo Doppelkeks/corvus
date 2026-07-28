@@ -277,13 +277,22 @@
     user-select: none;
 }
 
-.node-editor-viewport.dragging-node {
+.node-editor-viewport.dragging-node,
+.node-editor-viewport.dragging-annotation {
     cursor: grabbing;
     user-select: none;
 }
 
-.node-editor-viewport.connecting-port {
+.node-editor-viewport.connecting-port,
+.node-editor-viewport.creating-comment-section,
+.node-editor-viewport.creating-annotation {
     cursor: crosshair;
+    user-select: none;
+}
+
+.node-editor-viewport.resizing-annotation,
+.node-editor-viewport.annotation-resize-hovered {
+    cursor: nwse-resize;
     user-select: none;
 }
 
@@ -298,6 +307,14 @@
 
 .node-editor-viewport.node-header-hovered {
     cursor: grab;
+}
+
+.node-editor-viewport.annotation-hovered {
+    cursor: grab;
+}
+
+.node-editor-viewport.annotation-resize-hovered {
+    cursor: nwse-resize;
 }
 
 .node-editor-viewport.port-hovered {
