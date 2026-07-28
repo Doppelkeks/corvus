@@ -32,7 +32,9 @@
 }
 
 .node-dock-tabs {
-    display: flex;
+    display: grid;
+    grid-auto-columns: minmax(max-content, 1fr);
+    grid-auto-flow: column;
     min-width: 0;
     overflow-x: auto;
     border-bottom: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
@@ -44,7 +46,7 @@
 }
 
 .node-dock-tab {
-    min-width: max-content;
+    min-width: 0;
     border: 0;
     border-right: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
     border-bottom: 2px solid transparent;
@@ -56,6 +58,10 @@
     text-transform: uppercase;
     cursor: grab;
     touch-action: none;
+}
+
+.node-dock-tab:last-child {
+    border-right: 0;
 }
 
 .node-dock-tab[aria-selected="true"] {

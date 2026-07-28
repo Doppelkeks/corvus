@@ -78,4 +78,13 @@ describe("GPU-only graph surface architecture", () => {
         expect(styles).toContain(".node-workspace-panel[hidden]");
         expect(styles).toContain("display: none !important");
     });
+
+    it("distributes dock tabs across the complete dock rail", () => {
+        const styles = source("./styles.css");
+        expect(styles).toContain(
+            "grid-auto-columns: minmax(max-content, 1fr);"
+        );
+        expect(styles).toContain("grid-auto-flow: column;");
+        expect(styles).toContain(".node-dock-tab:last-child");
+    });
 });
