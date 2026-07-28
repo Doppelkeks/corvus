@@ -10,9 +10,11 @@ export {
     clampGraphZoom,
     DEFAULT_GRAPH_VIEW,
     GRAPH_ZOOM_RANGE,
+    graphWheelDeltaPixels,
     normalizeGraphView,
     screenToGraphPoint,
-    zoomGraphViewAt
+    zoomGraphViewAt,
+    zoomGraphViewFromWheel
 } from "./graph-camera.js";
 export {
     cubicControls,

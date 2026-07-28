@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+    graphWheelDeltaPixels,
     normalizeGraphView,
     screenToGraphPoint,
-    zoomGraphViewAt
+    zoomGraphViewAt,
+    zoomGraphViewFromWheel
 } from "./graph-camera.js";
 
 describe("unbounded graph camera", () => {
@@ -51,5 +53,45 @@ describe("unbounded graph camera", () => {
 
         expect(screenToGraphPoint(zoomed, anchor)).toEqual(graphPoint);
         expect(zoomed.scrollLeft).toBeLessThan(0);
+    });
+
+    it("zooms from an unmodified wheel around the pointer", () => {
+        const view = {
+            zoom: 1,
+            scrollLeft: -320,
+            scrollTop: 180
+        };
+        const anchor = { x: 240, y: 160 };
+        const graphPoint = screenToGraphPoint(view, anchor);
+        const zoomedIn = zoomGraphViewFromWheel(
+            view,
+            { deltaY: -120, deltaMode: 0 },
+            anchor,
+            600
+        );
+        const zoomedOut = zoomGraphViewFromWheel(
+            view,
+            { deltaY: 120, deltaMode: 0 },
+            anchor,
+            600
+        );
+
+        expect(zoomedIn.zoom).toBeGreaterThan(view.zoom);
+        expect(zoomedOut.zoom).toBeLessThan(view.zoom);
+        expect(screenToGraphPoint(zoomedIn, anchor).x)
+            .toBeCloseTo(graphPoint.x);
+        expect(screenToGraphPoint(zoomedIn, anchor).y)
+            .toBeCloseTo(graphPoint.y);
+    });
+
+    it("normalizes wheel line and page deltas", () => {
+        expect(graphWheelDeltaPixels({
+            deltaY: 3,
+            deltaMode: 1
+        }, 600)).toBe(48);
+        expect(graphWheelDeltaPixels({
+            deltaY: 1,
+            deltaMode: 2
+        }, 600)).toBe(600);
     });
 });

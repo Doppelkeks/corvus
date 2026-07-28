@@ -87,4 +87,12 @@ describe("GPU-only graph surface architecture", () => {
         expect(styles).toContain("grid-auto-flow: column;");
         expect(styles).toContain(".node-dock-tab:last-child");
     });
+
+    it("uses an unmodified wheel as the graph zoom gesture", () => {
+        const editor = source("./node-editor.js");
+        expect(editor).toContain("zoomGraphViewFromWheel");
+        expect(editor).not.toContain(
+            "if (event.ctrlKey || event.metaKey)"
+        );
+    });
 });

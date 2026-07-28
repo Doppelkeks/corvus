@@ -2,7 +2,7 @@ import { hitTestEdges } from "./edge-geometry.js";
 import {
     normalizeGraphView,
     screenToGraphPoint,
-    zoomGraphViewAt
+    zoomGraphViewFromWheel
 } from "./graph-camera.js";
 import { GraphWorkerClient } from "./graph-worker-client.js";
 import {
@@ -448,24 +448,17 @@ export class NodeEditor {
 
     #handleWheel(event) {
         event.preventDefault();
-        if (event.ctrlKey || event.metaKey) {
-            const rect = this.canvas.getBoundingClientRect();
-            const local = {
-                x: event.clientX - rect.left,
-                y: event.clientY - rect.top
-            };
-            this.setView(zoomGraphViewAt(
-                this.view,
-                this.view.zoom + (event.deltaY < 0 ? 0.1 : -0.1),
-                local
-            ));
-            return;
-        }
-        this.setView({
-            ...this.view,
-            scrollLeft: this.view.scrollLeft + event.deltaX,
-            scrollTop: this.view.scrollTop + event.deltaY
-        });
+        const rect = this.canvas.getBoundingClientRect();
+        const local = {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
+        };
+        this.setView(zoomGraphViewFromWheel(
+            this.view,
+            event,
+            local,
+            this.viewport.clientHeight
+        ));
     }
 
     #handlePointerDown(event) {
