@@ -1,12 +1,21 @@
 export const NODE_CARD_GEOMETRY = Object.freeze({
-    nodeWidth: 220,
-    minimumNodeHeight: 96,
-    headerHeight: 34,
-    previewInset: 8,
-    portSectionGap: 8,
-    portRowHeight: 20,
-    overlayPortPadding: 10,
-    bottomPadding: 8
+    nodeWidth: 110,
+    minimumNodeHeight: 48,
+    headerHeight: 22,
+    previewInset: 4,
+    portSectionGap: 4,
+    portRowHeight: 10,
+    overlayPortPadding: 5,
+    bottomPadding: 4,
+    cornerRadius: 3,
+    titleInsetX: 6,
+    titleInsetY: 5.5,
+    titleGlyphHeight: 11,
+    portGlyphHeight: 9.5,
+    portTextInsetX: 6,
+    portLabelPadding: 8,
+    portLabelHeight: 12,
+    portRadius: 3.5
 });
 
 export function nodePreviewRect(node, width, overrides = {}) {

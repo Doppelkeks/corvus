@@ -18,6 +18,7 @@ import {
     hasNodeTypeDragPayload,
     readNodeTypeDragPayload
 } from "./node-drag-payload.js";
+import { NODE_CARD_GEOMETRY } from "./node-card-geometry.js";
 import { connectionForPorts } from "./port-connection.js";
 import {
     nodesInSelection,
@@ -334,10 +335,10 @@ export class NodeEditor {
     #nodeDropRectangle(graphPoint) {
         const width = Number.isFinite(this.layoutOptions.nodeWidth)
             ? this.layoutOptions.nodeWidth
-            : 220;
+            : NODE_CARD_GEOMETRY.nodeWidth;
         const height = Number.isFinite(this.layoutOptions.minimumNodeHeight)
             ? this.layoutOptions.minimumNodeHeight
-            : 96;
+            : NODE_CARD_GEOMETRY.minimumNodeHeight;
         return Object.freeze({
             left: graphPoint.x - width / 2,
             top: graphPoint.y - height / 2,

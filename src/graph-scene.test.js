@@ -48,7 +48,7 @@ describe("buildGraphScene", () => {
             direction: "output",
             x: layout.nodes[0].width
         });
-        expect(scene.hitNodes[0].headerHeight).toBe(34);
+        expect(scene.hitNodes[0].headerHeight).toBe(22);
         expect(scene.hitEdges[0].points).toHaveLength(25);
         expect(Object.keys(scene.spatialIndex.cells).length).toBeGreaterThan(0);
     });
@@ -248,10 +248,10 @@ describe("buildGraphScene", () => {
             selectionOffset + 16
         );
 
-        expect([...bodyMeta]).toEqual([6, 1, 3, 0]);
+        expect([...bodyMeta]).toEqual([3, 1, 3, 0]);
         expect([...selectionFill]).toEqual([0, 0, 0, 0]);
         expect([...selectionBorder]).toEqual([0, 0, 0, 0]);
-        expect([...selectionMeta]).toEqual([6, 1.5, 4, 0]);
+        expect([...selectionMeta]).toEqual([3, 1.5, 4, 0]);
     });
 
     it("packs release-scale graphs into bounded transferable arrays", () => {

@@ -25,8 +25,10 @@ export const GRAPH_SCENE_STRIDES = Object.freeze({
 
 export const GRAPH_SCENE_METRICS = Object.freeze({
     ...NODE_CARD_GEOMETRY,
-    glyphWidth: gpuGlyphQuadWidth(16),
-    glyphHeight: 16,
+    glyphWidth: gpuGlyphQuadWidth(
+        NODE_CARD_GEOMETRY.titleGlyphHeight
+    ),
+    glyphHeight: NODE_CARD_GEOMETRY.titleGlyphHeight,
     spatialCellSize: 256
 });
 
@@ -132,6 +134,26 @@ function pushText(
         );
         cursorX += gpuGlyphAdvance(character, height);
     });
+}
+
+function textWithinWidth(value, height, maximumWidth, maximum = 28) {
+    const text = String(value ?? "").slice(0, maximum);
+    if (gpuTextWidth(text, height, maximum) <= maximumWidth) {
+        return text;
+    }
+    const suffix = "...";
+    let visible = text;
+    while (
+        visible.length > 0
+        && gpuTextWidth(
+            `${visible}${suffix}`,
+            height,
+            maximum
+        ) > maximumWidth
+    ) {
+        visible = visible.slice(0, -1);
+    }
+    return visible ? `${visible}${suffix}` : suffix;
 }
 
 function addSpatialRange(cells, kind, index, bounds, cellSize) {
@@ -240,7 +262,7 @@ export function buildGraphScene(model, layout, options = {}) {
             [0, 0, box.width, box.height],
             [0.05, 0.052, 0.048, 0.98],
             [0.2, 0.21, 0.19, 1],
-            [6, 1, 3, nodeIndex]
+            [metrics.cornerRadius, 1, 3, nodeIndex]
         );
         pushShape(
             underlayShapes,
@@ -249,20 +271,27 @@ export function buildGraphScene(model, layout, options = {}) {
                 ?? CATEGORY_COLORS[node.category]
                 ?? CATEGORY_COLORS.default,
             [0.12, 0.14, 0.15, 1],
-            [6, 0, 0, nodeIndex]
+            [metrics.cornerRadius, 0, 0, nodeIndex]
         );
         pushShape(
             selectionShapes,
             [0, 0, box.width, box.height],
             [0, 0, 0, 0],
             [0, 0, 0, 0],
-            [6, 1.5, 4, nodeIndex]
+            [metrics.cornerRadius, 1.5, 4, nodeIndex]
         );
-        pushText(glyphs, node.label, {
-            x: 12,
-            y: 10.5,
+        const title = textWithinWidth(
+            node.label,
+            metrics.titleGlyphHeight,
+            box.width - metrics.titleInsetX * 2,
+            24
+        );
+        pushText(glyphs, title, {
+            x: metrics.titleInsetX,
+            y: metrics.titleInsetY,
             nodeIndex,
-            maximum: 28
+            height: metrics.titleGlyphHeight,
+            maximum: title.length
         });
 
         if (node.preview) {
@@ -286,42 +315,58 @@ export function buildGraphScene(model, layout, options = {}) {
         ports.forEach((port) => {
             const color = PORT_COLORS[port.type] ?? PORT_COLORS.value;
             const maximumCharacters = 14;
-            const labelLength = Math.min(
-                String(port.id).length,
+            const portLabelHeight = metrics.portLabelHeight;
+            const portRadius = metrics.portRadius;
+            const portLabel = textWithinWidth(
+                port.id,
+                metrics.portGlyphHeight,
+                box.width * 0.44 - metrics.portLabelPadding,
                 maximumCharacters
             );
             const labelWidth = gpuTextWidth(
-                port.id,
-                12.5,
-                labelLength
-            ) + 15;
+                portLabel,
+                metrics.portGlyphHeight,
+                portLabel.length
+            ) + metrics.portLabelPadding;
             const labelX = port.direction === "input"
-                ? 5
-                : box.width - labelWidth - 5;
+                ? 2.5
+                : box.width - labelWidth - 2.5;
             pushShape(
                 overlayShapes,
-                [labelX, port.y - 8, labelWidth, 16],
+                [
+                    labelX,
+                    port.y - portLabelHeight / 2,
+                    labelWidth,
+                    portLabelHeight
+                ],
                 [0.025, 0.03, 0.025, 0.82],
                 [0.14, 0.16, 0.13, 0.92],
-                [3, 0.75, 0, nodeIndex]
+                [2, 0.75, 0, nodeIndex]
             );
             portOverlayShapeIndexByKey[
                 `${node.id}\u0000${port.id}\u0000${port.direction}`
             ] = overlayShapes.length / GRAPH_SCENE_STRIDES.shape;
             pushShape(
                 overlayShapes,
-                [port.x - 4.5, port.y - 4.5, 9, 9],
+                [
+                    port.x - portRadius,
+                    port.y - portRadius,
+                    portRadius * 2,
+                    portRadius * 2
+                ],
                 [0.035, 0.04, 0.034, 1],
                 color,
-                [4.5, 1.25, 2, nodeIndex]
+                [portRadius, 1.25, 2, nodeIndex]
             );
-            pushText(glyphs, port.id, {
-                x: port.direction === "input" ? 10 : box.width - 10,
-                y: port.y - 6,
+            pushText(glyphs, portLabel, {
+                x: port.direction === "input"
+                    ? metrics.portTextInsetX
+                    : box.width - metrics.portTextInsetX,
+                y: port.y - metrics.portGlyphHeight / 2,
                 nodeIndex,
                 color: TEXT.primary,
-                height: 12.5,
-                maximum: maximumCharacters,
+                height: metrics.portGlyphHeight,
+                maximum: portLabel.length,
                 align: port.direction === "output" ? "right" : "left"
             });
         });

@@ -82,7 +82,7 @@ describe("layoutNodeEditorModel", () => {
         const previewA = withPreview.nodes.find((node) => node.nodeId === "a");
 
         expect(previewA.height).toBeGreaterThanOrEqual(
-            plainA.height + 96
+            plainA.height + 48
         );
     });
 
@@ -107,7 +107,7 @@ describe("layoutNodeEditorModel", () => {
         const many = layout.nodes.find((node) => node.nodeId === "many");
 
         expect(many.height).toBe(few.height);
-        expect(many.height).toBe(254);
+        expect(many.height).toBe(132);
     });
 
     it("keeps parameter summaries out of graph card geometry", () => {
