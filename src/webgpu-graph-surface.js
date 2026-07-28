@@ -1,4 +1,5 @@
 import { createGpuFontAtlas } from "./gpu-font-atlas.js";
+import { resolveNodeEditorAccent } from "./node-editor-theme.js";
 import {
     EDGE_COMPUTE_SHADER,
     EDGE_RENDER_SHADER,
@@ -10,7 +11,7 @@ import {
     SHAPE_RENDER_SHADER
 } from "./gpu-graph-shaders.js";
 
-const CAMERA_FLOATS = 16;
+const CAMERA_FLOATS = 20;
 const EDGE_SEGMENTS = 24;
 const EDGE_VERTICES_PER_SEGMENT = 6;
 const EDGE_VERTEX_BYTES = 32;
@@ -53,6 +54,7 @@ function edgeTypeIndex(type) {
 export class WebGpuGraphSurface {
     constructor(canvas, {
         device = null,
+        accent = null,
         onStatus = null
     } = {}) {
         if (!(canvas instanceof HTMLCanvasElement)) {
@@ -60,6 +62,7 @@ export class WebGpuGraphSurface {
         }
         this.canvas = canvas;
         this.device = device;
+        this.accent = resolveNodeEditorAccent(canvas, accent);
         this.onStatus = onStatus;
         this.context = null;
         this.format = null;
@@ -612,7 +615,8 @@ export class WebGpuGraphSurface {
             globalThis.devicePixelRatio || 1,
             selectedPortShape,
             0,
-            0
+            0,
+            ...this.accent
         ]);
     }
 

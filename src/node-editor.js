@@ -60,6 +60,7 @@ function portDistance(point, node, port) {
 export class NodeEditor {
     constructor(container, {
         gpuDevice = null,
+        accent = null,
         layout = {},
         onError = null,
         onRendererChange = null,
@@ -115,6 +116,7 @@ export class NodeEditor {
         );
         this.surface = new WebGpuGraphSurface(this.canvas, {
             device: gpuDevice,
+            accent,
             onStatus: onRendererChange
         });
         this.ready = this.surface.initialize(gpuDevice).catch((error) => {

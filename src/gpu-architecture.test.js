@@ -52,6 +52,10 @@ describe("GPU-only graph surface architecture", () => {
         expect(shaders).toContain("nodeSelection[nodeIndex]");
         expect(shaders).toContain("topRoundedDistance");
         expect(shaders).toContain("shapeInfo.z == 4.0");
+        expect(shaders).toContain("accent: vec4f");
+        expect(shaders).toContain("border = camera.accent");
+        expect(shaders).toContain("color = camera.accent");
+        expect(shaders).not.toContain("0.529, 0.839, 0.122");
     });
 
     it("uses antialiased GPU text and renders a quiet line grid", () => {

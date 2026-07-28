@@ -4,6 +4,7 @@ struct Camera {
     state: vec4f,
     counts: vec4f,
     display: vec4f,
+    accent: vec4f,
 }
 @group(0) @binding(0) var<uniform> camera: Camera;
 
@@ -62,6 +63,7 @@ struct Camera {
     state: vec4f,
     counts: vec4f,
     display: vec4f,
+    accent: vec4f,
 }
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<storage, read> nodes: array<vec4f>;
@@ -97,7 +99,7 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
         (shapeInfo.z == 4.0 && nodeSelection[nodeIndex] != 0u)
         || f32(index) == camera.display.y
     ) {
-        border = vec4f(0.529, 0.839, 0.122, 1.0);
+        border = camera.accent;
     }
     outputShapes[base] = rect;
     outputShapes[base + 1u] = nextFill;
@@ -112,6 +114,7 @@ struct Camera {
     state: vec4f,
     counts: vec4f,
     display: vec4f,
+    accent: vec4f,
 }
 struct Overlay {
     rectangle: vec4f,
@@ -156,7 +159,7 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let border = 1.0 - smoothstep(1.0, 2.25, edgeDistance);
     let fill = 0.105;
     let alpha = max(fill, border * 0.82);
-    return vec4f(0.529, 0.839, 0.122, alpha);
+    return vec4f(camera.accent.rgb, alpha);
 }
 `;
 
@@ -166,6 +169,7 @@ struct Camera {
     state: vec4f,
     counts: vec4f,
     display: vec4f,
+    accent: vec4f,
 }
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<storage, read> shapes: array<vec4f>;
@@ -268,6 +272,7 @@ struct Camera {
     state: vec4f,
     counts: vec4f,
     display: vec4f,
+    accent: vec4f,
 }
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<storage, read> nodes: array<vec4f>;
@@ -338,10 +343,13 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
     var color = edgeColor(second.z);
     if (logicalEdgeIndex == camera.state.z) {
         halfWidthPx += 1.7;
-        color = vec4f(0.529, 0.839, 0.122, 1.0);
+        color = camera.accent;
     } else if (logicalEdgeIndex == camera.state.w) {
         halfWidthPx += 0.9;
-        color = vec4f(0.64, 0.82, 0.48, 1.0);
+        color = vec4f(
+            mix(camera.accent.rgb, vec3f(1.0), 0.18),
+            1.0
+        );
     }
     let graphHalfWidth = (halfWidthPx + 1.35) / camera.state.x;
     let aLeft = pointA - normal * graphHalfWidth;
@@ -364,6 +372,7 @@ struct Camera {
     state: vec4f,
     counts: vec4f,
     display: vec4f,
+    accent: vec4f,
 }
 @group(0) @binding(0) var<uniform> camera: Camera;
 
@@ -410,6 +419,7 @@ struct Camera {
     state: vec4f,
     counts: vec4f,
     display: vec4f,
+    accent: vec4f,
 }
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<storage, read> nodes: array<vec4f>;
@@ -480,6 +490,7 @@ struct Camera {
     state: vec4f,
     counts: vec4f,
     display: vec4f,
+    accent: vec4f,
 }
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<storage, read> nodes: array<vec4f>;
