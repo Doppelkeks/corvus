@@ -59,6 +59,13 @@ export {
     createNodeEditor
 } from "./node-editor.js";
 export {
+    NODE_TYPE_DRAG_MIME,
+    hasNodeTypeDragPayload,
+    isNodeTypeDragPayload,
+    readNodeTypeDragPayload,
+    writeNodeTypeDragPayload
+} from "./node-drag-payload.js";
+export {
     PanelLayoutController,
     createPanelLayoutController
 } from "./panel-layout.js";

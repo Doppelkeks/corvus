@@ -289,6 +289,10 @@
     user-select: none;
 }
 
+.node-editor-viewport.accepting-node-drop {
+    cursor: copy;
+}
+
 .node-editor-viewport.connecting-port,
 .node-editor-viewport.creating-comment-section,
 .node-editor-viewport.creating-annotation {

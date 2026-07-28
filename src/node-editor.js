@@ -14,6 +14,10 @@ import {
     resizeGraphAnnotation
 } from "./graph-annotations.js";
 import { normalizeNodeEditorModel } from "./model.js";
+import {
+    hasNodeTypeDragPayload,
+    readNodeTypeDragPayload
+} from "./node-drag-payload.js";
 import { connectionForPorts } from "./port-connection.js";
 import {
     nodesInSelection,
@@ -88,6 +92,7 @@ export class NodeEditor {
         this.view = normalizeGraphView();
         this.prepareRevision = 0;
         this.drag = null;
+        this.nodeDropPreview = null;
         this.annotationCreationMode = null;
         this.destroyed = false;
         this.cleanup = [];
@@ -98,7 +103,7 @@ export class NodeEditor {
         this.viewport.setAttribute("role", "application");
         this.viewport.setAttribute(
             "aria-label",
-            "Node graph editor. Drag ports to connect. Drag empty space to select. Alt-drag or middle-drag to pan."
+            "Node graph editor. Drag library nodes here to add them. Drag ports to connect. Drag empty space to select. Alt-drag or middle-drag to pan."
         );
         this.canvas = document.createElement("canvas");
         this.canvas.className = "node-editor-gpu-surface";
@@ -142,6 +147,9 @@ export class NodeEditor {
         };
         const onContextMenu = (event) => this.#handleContextMenu(event);
         const onKeyDown = (event) => this.#handleKeyDown(event);
+        const onDragOver = (event) => this.#handleNodeDragOver(event);
+        const onDragLeave = (event) => this.#handleNodeDragLeave(event);
+        const onDrop = (event) => this.#handleNodeDrop(event);
         this.viewport.addEventListener("wheel", onWheel, { passive: false });
         this.viewport.addEventListener("pointerdown", onPointerDown);
         this.viewport.addEventListener("pointermove", onPointerMove);
@@ -150,6 +158,9 @@ export class NodeEditor {
         this.viewport.addEventListener("pointerleave", onPointerLeave);
         this.viewport.addEventListener("contextmenu", onContextMenu);
         this.viewport.addEventListener("keydown", onKeyDown);
+        this.viewport.addEventListener("dragover", onDragOver);
+        this.viewport.addEventListener("dragleave", onDragLeave);
+        this.viewport.addEventListener("drop", onDrop);
         this.cleanup.push(
             () => this.viewport.removeEventListener("wheel", onWheel),
             () => this.viewport.removeEventListener(
@@ -173,7 +184,13 @@ export class NodeEditor {
                 "contextmenu",
                 onContextMenu
             ),
-            () => this.viewport.removeEventListener("keydown", onKeyDown)
+            () => this.viewport.removeEventListener("keydown", onKeyDown),
+            () => this.viewport.removeEventListener("dragover", onDragOver),
+            () => this.viewport.removeEventListener(
+                "dragleave",
+                onDragLeave
+            ),
+            () => this.viewport.removeEventListener("drop", onDrop)
         );
     }
 
@@ -310,6 +327,67 @@ export class NodeEditor {
             clientPoint: Object.freeze({
                 x: event.clientX,
                 y: event.clientY
+            })
+        });
+    }
+
+    #nodeDropRectangle(graphPoint) {
+        const width = Number.isFinite(this.layoutOptions.nodeWidth)
+            ? this.layoutOptions.nodeWidth
+            : 220;
+        const height = Number.isFinite(this.layoutOptions.minimumNodeHeight)
+            ? this.layoutOptions.minimumNodeHeight
+            : 96;
+        return Object.freeze({
+            left: graphPoint.x - width / 2,
+            top: graphPoint.y - height / 2,
+            right: graphPoint.x + width / 2,
+            bottom: graphPoint.y + height / 2
+        });
+    }
+
+    #clearNodeDropPreview() {
+        if (!this.nodeDropPreview) return;
+        this.nodeDropPreview = null;
+        this.viewport.classList.remove("accepting-node-drop");
+        this.#syncInteraction();
+    }
+
+    #handleNodeDragOver(event) {
+        if (!hasNodeTypeDragPayload(event.dataTransfer)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        const graphPoint = this.#graphPoint(event);
+        this.nodeDropPreview = this.#nodeDropRectangle(graphPoint);
+        this.viewport.classList.add("accepting-node-drop");
+        this.#syncInteraction();
+    }
+
+    #handleNodeDragLeave(event) {
+        if (
+            event.relatedTarget
+            && this.viewport.contains(event.relatedTarget)
+        ) {
+            return;
+        }
+        this.#clearNodeDropPreview();
+    }
+
+    #handleNodeDrop(event) {
+        const nodeTypeId = readNodeTypeDragPayload(event.dataTransfer);
+        if (!nodeTypeId) return;
+        event.preventDefault();
+        const requestPoint = this.#requestPoint(event);
+        const nodeRectangle = this.#nodeDropRectangle(
+            requestPoint.graphPoint
+        );
+        this.#clearNodeDropPreview();
+        this.callbacks.onDropNode?.({
+            nodeTypeId,
+            ...requestPoint,
+            nodePosition: Object.freeze({
+                x: nodeRectangle.left,
+                y: nodeRectangle.top
             })
         });
     }
@@ -973,7 +1051,8 @@ export class NodeEditor {
                         },
                         this.drag.current
                     )
-                    : null
+                    : null,
+            dropRect: this.nodeDropPreview
         });
         const edge = this.model?.edges.find(
             (entry) => entry.id === this.selectedEdgeId

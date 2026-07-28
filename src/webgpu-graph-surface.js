@@ -76,7 +76,8 @@ export class WebGpuGraphSurface {
             hoveredEdgeId: null,
             selectedPort: null,
             connectionPreview: null,
-            selectionRect: null
+            selectionRect: null,
+            dropRect: null
         };
         this.dynamicEdgeVisible = false;
         this.previewTextures = new Map();
@@ -720,16 +721,17 @@ export class WebGpuGraphSurface {
             pass.setBindGroup(0, this.glyphBindGroup);
             pass.draw(6, glyphCount);
         }
-        const selectionRect = this.interaction.selectionRect;
-        if (selectionRect) {
+        const interactionRect = this.interaction.dropRect
+            ?? this.interaction.selectionRect;
+        if (interactionRect) {
             this.device.queue.writeBuffer(
                 this.overlayBuffer,
                 0,
                 new Float32Array([
-                    selectionRect.left,
-                    selectionRect.top,
-                    selectionRect.right - selectionRect.left,
-                    selectionRect.bottom - selectionRect.top
+                    interactionRect.left,
+                    interactionRect.top,
+                    interactionRect.right - interactionRect.left,
+                    interactionRect.bottom - interactionRect.top
                 ])
             );
             pass.setPipeline(this.interactionOverlayPipeline);

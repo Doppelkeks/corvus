@@ -43,8 +43,12 @@ describe("GPU-only graph surface architecture", () => {
     });
 
     it("renders connection drags and multi-selection feedback on the GPU", () => {
+        const editor = source("./node-editor.js");
         const surface = source("./webgpu-graph-surface.js");
         const shaders = source("./gpu-graph-shaders.js");
+        expect(editor).toContain('addEventListener("dragover"');
+        expect(editor).toContain("onDropNode");
+        expect(surface).toContain("interaction.dropRect");
         expect(surface).toContain("dynamicEdgeVisible");
         expect(surface).toContain("interactionOverlayPipeline");
         expect(surface).toContain("nodeSelectionBuffer");
