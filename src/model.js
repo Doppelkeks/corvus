@@ -36,6 +36,19 @@ function normalizePreview(preview, path) {
     });
 }
 
+function normalizeColor(color, path) {
+    if (color === undefined || color === null) return null;
+    if (
+        !Array.isArray(color)
+        || color.length !== 4
+        || color.some((channel) =>
+            !Number.isFinite(channel) || channel < 0 || channel > 1)
+    ) {
+        throw new Error(`${path} must be an RGBA array with values from 0 to 1`);
+    }
+    return Object.freeze([...color]);
+}
+
 export function createEdgeId(edge) {
     return edge?.id ?? [
         edge?.from?.nodeId,
@@ -60,6 +73,7 @@ export function normalizeNodeEditorModel(model) {
             label: typeof node.label === "string" ? node.label : id,
             type: typeof node.type === "string" ? node.type : "",
             category: typeof node.category === "string" ? node.category : "default",
+            color: normalizeColor(node.color, `nodes[${index}].color`),
             order: Number.isFinite(node.order) ? node.order : index,
             preview: normalizePreview(node.preview, `nodes[${index}].preview`),
             inputs: Object.freeze((node.inputs ?? []).map((port, portIndex) =>

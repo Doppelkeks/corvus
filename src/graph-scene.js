@@ -204,7 +204,9 @@ export function buildGraphScene(model, layout, options = {}) {
         pushShape(
             underlayShapes,
             [0, 0, box.width, metrics.headerHeight],
-            CATEGORY_COLORS[node.category] ?? CATEGORY_COLORS.default,
+            node.color
+                ?? CATEGORY_COLORS[node.category]
+                ?? CATEGORY_COLORS.default,
             [0.12, 0.14, 0.15, 1],
             [6, 0, 0, nodeIndex]
         );

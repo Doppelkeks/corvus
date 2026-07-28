@@ -151,6 +151,32 @@ describe("buildGraphScene", () => {
         expect(headerFill[2]).toBeLessThan(headerFill[1]);
     });
 
+    it("uses a node's dedicated catalog color for its GPU header", () => {
+        const color = [0.31, 0.18, 0.42, 1];
+        const model = normalizeNodeEditorModel({
+            id: "atomic-color",
+            nodes: [{
+                id: "atomic",
+                label: "Atomic node",
+                color
+            }],
+            edges: []
+        });
+        const scene = buildGraphScene(
+            model,
+            layoutNodeEditorModel(model)
+        );
+        const headerFillOffset = GRAPH_SCENE_STRIDES.shape + 4;
+
+        const actual = [...scene.shapes.slice(
+            headerFillOffset,
+            headerFillOffset + 4
+        )];
+        actual.forEach((channel, index) => {
+            expect(channel).toBeCloseTo(color[index]);
+        });
+    });
+
     it("packs a top-rounded card and unobscured selection overlay", () => {
         const model = normalizeNodeEditorModel({
             id: "selection-outline",
