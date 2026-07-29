@@ -19,6 +19,7 @@ import {
     readNodeTypeDragPayload
 } from "./node-drag-payload.js";
 import { NODE_CARD_GEOMETRY } from "./node-card-geometry.js";
+import { nodeEditorCommandForKey } from "./node-editor-command.js";
 import { connectionForPorts } from "./port-connection.js";
 import {
     nodesInSelection,
@@ -967,14 +968,22 @@ export class NodeEditor {
     #handleContextMenu(event) {
         const point = this.#graphPoint(event);
         event.preventDefault();
-        if (
-            this.#portAt(point)
-            || this.#nodeAt(point)
-            || this.#annotationAt(point)
-            || this.#edgeAt(point)
-        ) {
+        this.viewport.focus({ preventScroll: true });
+        if (this.#portAt(point)) return;
+        const node = this.#nodeAt(point);
+        if (node) {
+            if (node.terminal) return;
+            if (!this.selectedNodeIds.has(node.id)) {
+                this.selectNode(node.id);
+            }
+            this.callbacks.onRequestSelectionActions?.({
+                ...this.#requestPoint(event),
+                nodeIds: [...this.selectedNodeIds],
+                primaryNodeId: this.selectedNodeId
+            });
             return;
         }
+        if (this.#annotationAt(point) || this.#edgeAt(point)) return;
         this.callbacks.onRequestNode?.({
             ...this.#requestPoint(event),
             sourcePort: null
@@ -982,6 +991,24 @@ export class NodeEditor {
     }
 
     #handleKeyDown(event) {
+        const command = nodeEditorCommandForKey(event, {
+            hasSelection: this.selectedNodeIds.size > 0
+        });
+        if (command) {
+            event.preventDefault();
+            if (command === "copy") {
+                this.callbacks.onCopyNodes?.([...this.selectedNodeIds]);
+            } else if (command === "duplicate") {
+                this.callbacks.onDuplicateNodes?.(
+                    [...this.selectedNodeIds]
+                );
+            } else {
+                this.callbacks.onPasteNodes?.({
+                    graphPoint: this.graphViewportCenter()
+                });
+            }
+            return;
+        }
         if (event.key === "Escape") {
             if (this.annotationCreationMode) {
                 this.annotationCreationMode = null;
@@ -1075,13 +1102,13 @@ export class NodeEditor {
                 `${source?.label ?? "Node"} → ${target?.label ?? "Node"} selected · Delete removes connection`;
         } else if (this.selectedNodeIds.size > 1) {
             this.selectionStatus.textContent =
-                `${this.selectedNodeIds.size} nodes selected`;
+                `${this.selectedNodeIds.size} nodes selected - Ctrl C copies - Ctrl D duplicates`;
         } else if (this.selectedNodeId) {
             const node = this.model?.nodes.find(
                 (entry) => entry.id === this.selectedNodeId
             );
             this.selectionStatus.textContent =
-                `${node?.label ?? "Node"} selected`;
+                `${node?.label ?? "Node"} selected - Ctrl D duplicates`;
         }
     }
 

@@ -75,3 +75,6 @@ export {
     normalizeDockLayout
 } from "./dock-layout.js";
 export { HistoryStack } from "./history-stack.js";
+export {
+    nodeEditorCommandForKey
+} from "./node-editor-command.js";
