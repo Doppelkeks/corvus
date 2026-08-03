@@ -75,6 +75,7 @@ export class WebGpuGraphSurface {
             selectedEdgeId: null,
             hoveredEdgeId: null,
             selectedPort: null,
+            highlightedPort: null,
             connectionPreview: null,
             selectionRect: null,
             dropRect: null
@@ -600,6 +601,12 @@ export class WebGpuGraphSurface {
                 `${selectedPort.nodeId}\u0000${selectedPort.port}\u0000${selectedPort.direction}`
             ] ?? -1
             : -1;
+        const highlightedPort = this.interaction.highlightedPort;
+        const highlightedPortShape = highlightedPort
+            ? this.scene.portShapeIndexByKey[
+                `${highlightedPort.nodeId}\u0000${highlightedPort.port}\u0000${highlightedPort.direction}`
+            ] ?? -1
+            : -1;
         return new Float32Array([
             width,
             height,
@@ -615,7 +622,7 @@ export class WebGpuGraphSurface {
             this.scene.glyphs.length / 16,
             globalThis.devicePixelRatio || 1,
             selectedPortShape,
-            0,
+            highlightedPortShape,
             0,
             ...this.accent
         ]);

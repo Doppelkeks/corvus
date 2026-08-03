@@ -12,6 +12,8 @@ describe("Corvus package boundary", () => {
         expect(packageJson.name).toBe("@raykast/corvus");
         expect(packageJson.dependencies).toBeUndefined();
         expect(packageJson.license).toBe("MIT");
+        expect(packageJson.exports["./inspector"])
+            .toBe("./src/node-inspector.js");
         expect(packageJson.author).toEqual({
             name: "Raykast",
             url: "https://raykast.com/"

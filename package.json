@@ -8,6 +8,7 @@
     "exports": {
         ".": "./src/index.js",
         "./dock-layout": "./src/dock-layout.js",
+        "./inspector": "./src/node-inspector.js",
         "./styles.css": "./src/styles.css",
         "./theme.css": "./src/theme.css"
     },

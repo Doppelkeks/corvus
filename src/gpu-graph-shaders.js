@@ -98,8 +98,12 @@ fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
     } else if (
         (shapeInfo.z == 4.0 && nodeSelection[nodeIndex] != 0u)
         || f32(index) == camera.display.y
+        || f32(index) == camera.display.z
     ) {
         border = camera.accent;
+        if (f32(index) == camera.display.z) {
+            nextFill = vec4f(camera.accent.rgb, 0.28);
+        }
     }
     outputShapes[base] = rect;
     outputShapes[base + 1u] = nextFill;

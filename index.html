@@ -9,7 +9,7 @@
     </head>
     <body>
         <main>
-            <header>
+            <header class="demo-header">
                 <div class="brand-row">
                     <div>
                         <p>Developed by <a href="https://raykast.com/">Raykast</a></p>
@@ -24,7 +24,28 @@
                 </div>
                 <small id="graph-stats" aria-live="polite"></small>
             </header>
-            <section id="editor" aria-label="Corvus node editor example"></section>
+            <section class="demo-workspace" id="workspace">
+                <section id="editor" aria-label="Corvus node editor example"></section>
+                <aside class="corvus-inspector-panel">
+                    <header class="corvus-panel-toolbar" data-panel-drag-handle tabindex="0">
+                        <span aria-hidden="true">⠿</span>
+                        <strong>Inspector</strong>
+                    </header>
+                    <div id="inspector"></div>
+                </aside>
+                <aside class="node-workspace-dock demo-dock-left" data-dock-id="left">
+                    <div class="node-dock-tabs" data-dock-tabs role="tablist" aria-label="Left dock"></div>
+                    <div class="node-dock-content" data-dock-content></div>
+                </aside>
+                <aside class="node-workspace-dock demo-dock-right" data-dock-id="right">
+                    <div class="node-dock-tabs" data-dock-tabs role="tablist" aria-label="Right dock"></div>
+                    <div class="node-dock-content" data-dock-content></div>
+                </aside>
+                <aside class="node-workspace-dock demo-dock-bottom" data-dock-id="bottom">
+                    <div class="node-dock-tabs" data-dock-tabs role="tablist" aria-label="Bottom dock"></div>
+                    <div class="node-dock-content" data-dock-content></div>
+                </aside>
+            </section>
         </main>
         <script type="module" src="/demo/main.js"></script>
     </body>

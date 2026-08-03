@@ -1,10 +1,16 @@
-import { createEdgeId, createNodeEditor } from "../src/index.js";
+import {
+    createDockLayoutController,
+    createEdgeId,
+    createNodeEditor,
+    createNodeInspector
+} from "../src/index.js";
 import "../src/styles.css";
 import "./styles.css";
 
 let nextNodeNumber = 1;
 let positions = {};
-let selectedNodeId = null;
+let selectedNodeId = "validate";
+let selectedNodeIds = new Set([selectedNodeId]);
 let selectedEdgeId = null;
 let rendererBackend = "starting";
 
@@ -59,6 +65,19 @@ let model = {
 
 const container = document.querySelector("#editor");
 const stats = document.querySelector("#graph-stats");
+const inspector = createNodeInspector(document.querySelector("#inspector"));
+const dockLayout = createDockLayoutController(document.querySelector("#workspace"), {
+    storageKey: "corvus.example.docks.v1",
+    panels: [{
+        id: "inspector",
+        label: "Inspector",
+        element: document.querySelector(".corvus-inspector-panel"),
+        defaultDock: "right",
+        minWidth: 240,
+        minHeight: 280,
+        floatRect: { x: 860, y: 24, width: 320, height: 540 }
+    }]
+});
 const editor = createNodeEditor(container, {
     onRendererChange(status) {
         rendererBackend = status.backend === "error"
@@ -78,22 +97,44 @@ function updateStats(message = "") {
     stats.textContent = message ? `${details} · ${message}` : details;
 }
 
+function updateInspector(focus = false) {
+    inspector.update(model, {
+        selectedNodeId,
+        selectedNodeIds,
+        selectedEdgeId
+    });
+    if (focus) dockLayout.focusPanel("inspector");
+}
+
 function updateEditor() {
     editor.update(model, {
         positions,
         selectedNodeId,
+        selectedNodeIds,
         selectedEdgeId,
         onSelectNode(nodeId) {
             selectedNodeId = nodeId;
+            selectedNodeIds = new Set([nodeId].filter(Boolean));
             selectedEdgeId = null;
+            updateInspector(true);
+        },
+        onSelectNodes(nodeIds, { primaryNodeId }) {
+            selectedNodeId = primaryNodeId;
+            selectedNodeIds = new Set(nodeIds);
+            selectedEdgeId = null;
+            updateInspector(true);
         },
         onSelectEdge(edgeId) {
             selectedNodeId = null;
+            selectedNodeIds.clear();
             selectedEdgeId = edgeId;
+            updateInspector(true);
         },
         onClearSelection() {
             selectedNodeId = null;
+            selectedNodeIds.clear();
             selectedEdgeId = null;
+            updateInspector();
         },
         onMoveNodes(nextPositions) {
             positions = { ...positions, ...nextPositions };
@@ -123,6 +164,7 @@ function updateEditor() {
             model = { ...model, edges: [...retainedEdges, edge] };
             selectedEdgeId = edge.id;
             selectedNodeId = null;
+            selectedNodeIds.clear();
             updateEditor();
         },
         onDeleteNode(nodeId) {
@@ -140,6 +182,7 @@ function updateEditor() {
             updateEditor();
         }
     });
+    updateInspector();
     updateStats();
 }
 
@@ -155,6 +198,7 @@ function deleteNodes(nodeIds) {
     positions = Object.fromEntries(Object.entries(positions).filter(
         ([nodeId]) => !deletedIds.has(nodeId)));
     selectedNodeId = null;
+    selectedNodeIds.clear();
     updateEditor();
 }
 
@@ -174,6 +218,7 @@ function addNode() {
         }]
     };
     selectedNodeId = id;
+    selectedNodeIds = new Set([id]);
     selectedEdgeId = null;
     updateEditor();
 }
@@ -181,6 +226,10 @@ function addNode() {
 document.querySelector('[data-action="add-node"]').addEventListener("click", addNode);
 document.querySelector('[data-action="auto-layout"]').addEventListener("click", () => editor.autoLayout());
 document.querySelector('[data-action="reset-view"]').addEventListener("click", () => editor.resetView());
-window.addEventListener("beforeunload", () => editor.destroy(), { once: true });
+window.addEventListener("beforeunload", () => {
+    editor.destroy();
+    inspector.destroy();
+    dockLayout.destroy();
+}, { once: true });
 
 updateEditor();

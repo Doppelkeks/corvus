@@ -15,6 +15,8 @@ Corvus is open source and developed by [Raykast](https://raykast.com/).
 - Spatially indexed pointer hit testing and compact typed-array scene data.
 - Direct sampling of host-provided `GPUTexture` previews without readback.
 - Application-owned state through a small model and callback boundary.
+- A standard selection inspector that can be docked, floated, or extended.
+- Nearest-compatible-port highlighting and connection snapping.
 - Dockable workspace panels and reusable headless graph utilities.
 - A complete scoped theme with ProFont and no runtime dependencies.
 
@@ -26,8 +28,8 @@ Corvus is open source and developed by [Raykast](https://raykast.com/).
 ## Run the complete example
 
 The repository includes a working example with node creation, automatic
-layout, viewport reset, node movement, port connections, selection, and
-keyboard deletion.
+layout, viewport reset, node movement, port connections, nearest-port snapping,
+selection inspection, dock/floating panel behavior, and keyboard deletion.
 
 ```sh
 pnpm install
@@ -113,6 +115,12 @@ and callbacks for connection, movement, deletion, duplication, dropping,
 selection, and context actions. The example demonstrates a complete mutable
 host around those callbacks.
 
+During a connection drag, Corvus searches the nearby spatial-index cells for
+the closest compatible port. The GPU preview snaps to that port and highlights
+it before the pointer reaches the socket. Set `portSnapRadius` when creating the
+editor to change the default 72-pixel attraction distance, or set it to `0` to
+disable snapping.
+
 ## Model boundary
 
 Each node has a stable `id`, display `label`, optional category and color,
@@ -161,6 +169,34 @@ Regenerate the checked-in atlas and fixed-width layout metrics with:
 python -m pip install -r requirements-font.txt
 pnpm font:generate
 ```
+
+## Standard inspector
+
+Corvus includes a renderer-independent inspector for nodes, connections, and
+multi-node selections. Its default view covers identity, category, summary,
+and ports. The optional `renderDetails` hook can append host-specific controls.
+
+```js
+import { createNodeInspector } from "@raykast/corvus";
+
+const inspector = createNodeInspector(inspectorElement, {
+  renderDetails(description) {
+    if (description.kind !== "node") return null;
+    const controls = document.createElement("div");
+    controls.textContent = `Host controls for ${description.node.id}`;
+    return controls;
+  }
+});
+
+inspector.update(model, {
+  selectedNodeId,
+  selectedNodeIds,
+  selectedEdgeId
+});
+```
+
+The inspector is an ordinary element, so it can be registered directly with
+the dock controller as shown in the runnable example.
 
 ## Dockable workspace panels
 

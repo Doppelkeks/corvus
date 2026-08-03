@@ -20,7 +20,10 @@ import {
 } from "./node-drag-payload.js";
 import { NODE_CARD_GEOMETRY } from "./node-card-geometry.js";
 import { nodeEditorCommandForKey } from "./node-editor-command.js";
-import { connectionForPorts } from "./port-connection.js";
+import {
+    closestCompatiblePort,
+    connectionForPorts
+} from "./port-connection.js";
 import {
     nodesInSelection,
     selectionRectangle
@@ -63,11 +66,20 @@ function portDistance(point, node, port) {
     );
 }
 
+const DEFAULT_PORT_SNAP_RADIUS = 72;
+
+function portKey(port) {
+    return port
+        ? `${port.nodeId}/${port.direction}/${port.port}`
+        : "";
+}
+
 export class NodeEditor {
     constructor(container, {
         gpuDevice = null,
         accent = null,
         layout = {},
+        portSnapRadius = DEFAULT_PORT_SNAP_RADIUS,
         onError = null,
         onRendererChange = null,
         workerFactory = undefined
@@ -78,6 +90,9 @@ export class NodeEditor {
         this.container = container;
         this.layoutOptions = layout;
         this.onError = onError;
+        this.portSnapRadius = Number.isFinite(portSnapRadius)
+            ? Math.max(0, portSnapRadius)
+            : DEFAULT_PORT_SNAP_RADIUS;
         this.callbacks = {};
         this.model = null;
         this.positions = new Map();
@@ -406,9 +421,27 @@ export class NodeEditor {
         };
     }
 
-    #candidateNodeIndexes(point) {
-        const indexes = spatialCell(this.scene, point)?.nodes;
-        return indexes ?? [];
+    #candidateNodeIndexes(point, radius = 0) {
+        if (radius <= 0) {
+            const indexes = spatialCell(this.scene, point)?.nodes;
+            return indexes ?? [];
+        }
+        const cellSize = this.scene.spatialIndex.cellSize;
+        const minimumX = Math.floor((point.x - radius) / cellSize);
+        const maximumX = Math.floor((point.x + radius) / cellSize);
+        const minimumY = Math.floor((point.y - radius) / cellSize);
+        const maximumY = Math.floor((point.y + radius) / cellSize);
+        const indexes = new Set();
+        for (let y = minimumY; y <= maximumY; y += 1) {
+            for (let x = minimumX; x <= maximumX; x += 1) {
+                const cell = this.scene.spatialIndex.cells[`${x}:${y}`];
+                const nodeIndexes = cell?.nodes ?? [];
+                for (let index = 0; index < nodeIndexes.length; index += 1) {
+                    indexes.add(nodeIndexes[index]);
+                }
+            }
+        }
+        return [...indexes];
     }
 
     #nodeAt(point) {
@@ -440,6 +473,28 @@ export class NodeEditor {
             }
         }
         return null;
+    }
+
+    #closestConnectionPort(point, sourcePort) {
+        if (!this.scene || !sourcePort) return null;
+        if (this.portSnapRadius <= 0) {
+            const exact = this.#portAt(point);
+            const targetPort = exact ? this.#portDescriptor(exact) : null;
+            if (!connectionForPorts(sourcePort, targetPort)) return null;
+            return {
+                ...exact,
+                point: {
+                    x: exact.node.x + exact.port.x,
+                    y: exact.node.y + exact.port.y
+                },
+                distance: portDistance(point, exact.node, exact.port)
+            };
+        }
+        const radius = this.portSnapRadius / this.view.zoom;
+        const nodes = this.#candidateNodeIndexes(point, radius).map(
+            (index) => this.#liveNode(index)
+        );
+        return closestCompatiblePort(nodes, point, sourcePort, radius);
     }
 
     #edgeAt(point, tolerance = 9) {
@@ -574,6 +629,8 @@ export class NodeEditor {
                 clientX: event.clientX,
                 clientY: event.clientY,
                 point,
+                targetPort: null,
+                targetKey: "",
                 moved: false
             };
             this.viewport.classList.add("connecting-port");
@@ -725,11 +782,36 @@ export class NodeEditor {
             }
             if (this.drag.kind === "connection") {
                 const point = this.#graphPoint(event);
-                this.drag.point = point;
+                const target = this.#closestConnectionPort(
+                    point,
+                    this.drag.sourcePort
+                );
+                const targetPort = target
+                    ? this.#portDescriptor(target)
+                    : null;
+                const targetKey = portKey(targetPort);
+                this.drag.point = target?.point ?? point;
+                this.drag.targetPort = targetPort;
                 this.drag.moved ||= Math.hypot(
                     event.clientX - this.drag.clientX,
                     event.clientY - this.drag.clientY
                 ) >= 4;
+                if (targetKey !== this.drag.targetKey) {
+                    this.drag.targetKey = targetKey;
+                    this.viewport.classList.toggle(
+                        "port-snap-target",
+                        Boolean(targetPort)
+                    );
+                    if (targetPort) {
+                        this.viewport.dataset.connectionTarget = targetKey;
+                        this.selectionStatus.textContent =
+                            `Release to connect to ${target.node.label} · ${target.port.id}`;
+                    } else {
+                        delete this.viewport.dataset.connectionTarget;
+                        this.selectionStatus.textContent =
+                            "Drag toward a compatible port to connect";
+                    }
+                }
                 this.#syncInteraction();
                 return;
             }
@@ -849,8 +931,10 @@ export class NodeEditor {
             "resizing-annotation",
             "creating-annotation",
             "connecting-port",
+            "port-snap-target",
             "selecting-nodes"
         );
+        delete this.viewport.dataset.connectionTarget;
         if (drag.kind === "node") {
             const moved = Object.fromEntries(
                 Object.keys(drag.startingPositions).map((nodeId) => [
@@ -935,7 +1019,9 @@ export class NodeEditor {
         }
         if (drag.kind === "connection") {
             const point = this.#graphPoint(event);
-            const targetHit = this.#portAt(point);
+            const targetHit = event.type === "pointercancel"
+                ? null
+                : this.#closestConnectionPort(point, drag.sourcePort);
             const targetPort = targetHit
                 ? this.#portDescriptor(targetHit)
                 : null;
@@ -947,7 +1033,7 @@ export class NodeEditor {
             this.#syncInteraction();
             if (drag.moved && connection) {
                 this.callbacks.onConnectPorts?.(connection);
-            } else if (drag.moved && !targetHit) {
+            } else if (drag.moved && !targetPort) {
                 this.callbacks.onRequestNode?.({
                     ...this.#requestPoint(event),
                     sourcePort: drag.sourcePort
@@ -1058,6 +1144,9 @@ export class NodeEditor {
             selectedEdgeId: this.selectedEdgeId,
             hoveredEdgeId: this.hoveredEdgeId,
             selectedPort: this.selectedPort,
+            highlightedPort: this.drag?.kind === "connection"
+                ? this.drag.targetPort
+                : null,
             connectionPreview: this.drag?.kind === "connection"
                 ? {
                     sourcePort: this.drag.sourcePort,

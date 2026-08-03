@@ -48,12 +48,16 @@ describe("GPU-only graph surface architecture", () => {
         expect(surface).toContain("dynamicEdgeVisible");
         expect(surface).toContain("interactionOverlayPipeline");
         expect(surface).toContain("nodeSelectionBuffer");
+        expect(surface).toContain("interaction.highlightedPort");
+        expect(editor).toContain("closestCompatiblePort");
+        expect(editor).toContain("port-snap-target");
         expect(shaders).toContain("INTERACTION_OVERLAY_SHADER");
         expect(shaders).toContain("nodeSelection[nodeIndex]");
         expect(shaders).toContain("topRoundedDistance");
         expect(shaders).toContain("shapeInfo.z == 4.0");
         expect(shaders).toContain("accent: vec4f");
         expect(shaders).toContain("border = camera.accent");
+        expect(shaders).toContain("camera.display.z");
         expect(shaders).toContain("color = camera.accent");
         expect(shaders).not.toContain("0.529, 0.839, 0.122");
     });

@@ -47,6 +47,7 @@ export {
     gpuTextWidth
 } from "./gpu-font-layout.js";
 export {
+    closestCompatiblePort,
     connectionForPorts,
     portsCanConnect
 } from "./port-connection.js";
@@ -58,6 +59,11 @@ export {
     NodeEditor,
     createNodeEditor
 } from "./node-editor.js";
+export {
+    NodeInspector,
+    createNodeInspector,
+    describeNodeInspector
+} from "./node-inspector.js";
 export {
     NODE_TYPE_DRAG_MIME,
     hasNodeTypeDragPayload,
