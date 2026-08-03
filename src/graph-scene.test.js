@@ -118,7 +118,7 @@ describe("buildGraphScene", () => {
                     id: `input-${index}`,
                     type: "color"
                 })),
-                outputs: [{ id: "material", type: "bundle" }]
+                outputs: [{ id: "result", type: "bundle" }]
             }],
             edges: []
         });
@@ -168,13 +168,13 @@ describe("buildGraphScene", () => {
         expect(scene.glyphs.length).toBe(summaryFreeScene.glyphs.length);
     });
 
-    it("keeps normal-node header surfaces neutral instead of blue", () => {
+    it("keeps transform-node header surfaces neutral instead of blue", () => {
         const model = normalizeNodeEditorModel({
-            id: "neutral-normal-node",
+            id: "neutral-transform-node",
             nodes: [{
-                id: "normal",
-                label: "Height To Normal",
-                category: "normal",
+                id: "transform",
+                label: "Transform",
+                category: "transform",
                 inputs: [{ id: "in", type: "grayscale" }],
                 outputs: [{ id: "out", type: "color" }]
             }],

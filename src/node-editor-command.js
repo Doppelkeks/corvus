@@ -6,7 +6,7 @@ const COMMAND_KEYS = Object.freeze({
 
 /**
  * Resolves graph-editing shortcuts without coupling the WebGPU interaction
- * surface to a particular material or application model.
+ * surface to a particular domain or application model.
  */
 export function nodeEditorCommandForKey(event, {
     hasSelection = false

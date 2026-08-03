@@ -66,7 +66,7 @@ export class GraphWorkerClient {
     constructor({
         workerFactory = () => new Worker(
             new URL("./graph-layout.worker.js", import.meta.url),
-            { type: "module", name: "echo-graph-layout" }
+            { type: "module", name: "corvus-graph-layout" }
         )
     } = {}) {
         this.nextRequestId = 1;

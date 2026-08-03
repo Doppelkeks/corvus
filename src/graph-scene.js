@@ -33,16 +33,15 @@ export const GRAPH_SCENE_METRICS = Object.freeze({
 });
 
 const CATEGORY_COLORS = Object.freeze({
-    noise: [0.07, 0.18, 0.14, 1],
-    grunge: [0.18, 0.16, 0.09, 1],
-    alpha: [0.11, 0.16, 0.1, 1],
-    pattern: [0.16, 0.15, 0.09, 1],
-    material: [0.16, 0.09, 0.22, 1],
-    "custom-code": [0.2, 0.15, 0.07, 1],
+    source: [0.07, 0.18, 0.14, 1],
+    transform: [0.13, 0.15, 0.08, 1],
+    process: [0.16, 0.09, 0.22, 1],
+    logic: [0.18, 0.16, 0.09, 1],
+    data: [0.11, 0.16, 0.1, 1],
+    utility: [0.2, 0.15, 0.07, 1],
     output: [0.11, 0.16, 0.09, 1],
     default: [0.08, 0.085, 0.075, 1],
-    atomic: [0.08, 0.085, 0.075, 1],
-    normal: [0.13, 0.15, 0.08, 1]
+    atomic: [0.08, 0.085, 0.075, 1]
 });
 
 const PORT_COLORS = Object.freeze({

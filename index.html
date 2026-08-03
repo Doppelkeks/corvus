@@ -4,16 +4,27 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#090b0c" />
-        <title>WebGPU Node Editor</title>
+        <meta name="description" content="Corvus is a high-performance WebGPU node editor developed by Raykast." />
+        <title>Corvus — WebGPU Node Editor</title>
     </head>
     <body>
         <main>
             <header>
-                <p>Raykast open source</p>
-                <h1>WebGPU Node Editor</h1>
-                <span>One canvas. GPU text, nodes, previews, and connections.</span>
+                <div class="brand-row">
+                    <div>
+                        <p>Developed by <a href="https://raykast.com/">Raykast</a></p>
+                        <h1>Corvus</h1>
+                        <span>A high-performance WebGPU node editor for the browser.</span>
+                    </div>
+                    <nav aria-label="Example controls">
+                        <button type="button" data-action="add-node">Add node</button>
+                        <button type="button" data-action="auto-layout">Auto layout</button>
+                        <button type="button" data-action="reset-view">Reset view</button>
+                    </nav>
+                </div>
+                <small id="graph-stats" aria-live="polite"></small>
             </header>
-            <section id="editor" aria-label="WebGPU node editor demo"></section>
+            <section id="editor" aria-label="Corvus node editor example"></section>
         </main>
         <script type="module" src="/demo/main.js"></script>
     </body>

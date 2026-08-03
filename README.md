@@ -1,124 +1,174 @@
-# Raykast WebGPU Node Editor
+# Corvus
 
-A use-case-agnostic, WebGPU-accelerated node editor for browser applications.
-It knows about nodes, ports, edges, layout, selection, and workspace panels; it
-does not import material, art, compiler, or runtime packages.
+Corvus is a high-performance, WebGPU-accelerated node editor for browser
+applications. It renders the graph, labels, ports, connections, selection, and
+live previews in one GPU canvas while keeping state ownership in your
+application.
+
+Corvus is open source and developed by [Raykast](https://raykast.com/).
+
+## Highlights
+
+- One viewport-sized WebGPU canvas, even when graph coordinates are very large.
+- GPU-rendered cards, text, ports, connection ribbons, selection, and previews.
+- Deterministic layout and scene packing in a dedicated module worker.
+- Spatially indexed pointer hit testing and compact typed-array scene data.
+- Direct sampling of host-provided `GPUTexture` previews without readback.
+- Application-owned state through a small model and callback boundary.
+- Dockable workspace panels and reusable headless graph utilities.
+- A complete scoped theme with ProFont and no runtime dependencies.
+
+## Requirements
+
+- A browser with WebGPU support.
+- Node.js 20 or newer for local development.
+
+## Run the complete example
+
+The repository includes a working example with node creation, automatic
+layout, viewport reset, node movement, port connections, selection, and
+keyboard deletion.
 
 ```sh
-pnpm add @raykast/webgpu-node-editor
+pnpm install
+pnpm dev
 ```
 
-## Model
+Open the local URL printed by Vite. The complete host implementation is in
+[`demo/main.js`](demo/main.js), with its page in [`index.html`](index.html).
+
+## Install
+
+```sh
+pnpm add @raykast/corvus
+```
+
+Import the editor and its complete default theme:
+
+```js
+import { createNodeEditor } from "@raykast/corvus";
+import "@raykast/corvus/styles.css";
+```
+
+Give the host element an explicit size:
+
+```css
+#editor {
+  width: 100%;
+  height: 42rem;
+}
+```
+
+Create a graph and mount Corvus:
 
 ```js
 const model = {
-  id: "example",
-  nodes: [{
-    id: "source",
-    label: "Source",
-    type: "generator",
-    category: "input",
-    inputs: [],
-    outputs: [{ id: "out", label: "Output", type: "color" }],
-    preview: { label: "Generated output", aspectRatio: 16 / 9 },
-    summary: [{ label: "seed", value: "42" }]
-  }, {
-    id: "result",
-    label: "Result",
-    type: "output",
-    category: "output",
-    inputs: [{ id: "in", label: "Input", type: "color" }],
-    outputs: []
-  }],
-  edges: [{
-    id: "source-to-result",
-    type: "color",
-    from: { nodeId: "source", port: "out" },
-    to: { nodeId: "result", port: "in" }
-  }]
+  id: "request-flow",
+  label: "Request flow",
+  nodes: [
+    {
+      id: "request",
+      label: "Request",
+      type: "source",
+      category: "source",
+      inputs: [],
+      outputs: [{ id: "value", label: "Value", type: "value" }],
+      summary: [{ label: "method", value: "GET" }]
+    },
+    {
+      id: "response",
+      label: "Response",
+      type: "output",
+      category: "output",
+      terminal: true,
+      inputs: [{ id: "input", label: "Input", type: "value" }],
+      outputs: [],
+      summary: [{ label: "status", value: "200" }]
+    }
+  ],
+  edges: [
+    {
+      id: "request-to-response",
+      type: "value",
+      from: { nodeId: "request", port: "value" },
+      to: { nodeId: "response", port: "input" }
+    }
+  ]
 };
-```
 
-## Editor
-
-```js
-import { createNodeEditor } from "@raykast/webgpu-node-editor";
-import "@raykast/webgpu-node-editor/styles.css";
-
-const editor = createNodeEditor(container, {
-  // Prefer lending an existing application device.
-  gpuDevice,
-  onRendererChange: ({ backend, ready }) => {
-    console.log(backend, ready);
+const editor = createNodeEditor(document.querySelector("#editor"), {
+  onRendererChange(status) {
+    console.log(`Corvus renderer: ${status.backend}`);
+  },
+  onError(error) {
+    console.error(error);
   }
 });
 
-editor.update(model, {
-  positions,
-  viewState,
-  selectedNodeId,
-  selectedEdgeId,
-  onSelectNode,
-  onSelectEdge,
-  onDeleteNode,
-  onDeleteEdge,
-  onSelectPort,
-  onMoveNode,
-  onPositionsChange,
-  onViewChange
-});
+editor.update(model);
 ```
 
-The returned editor also provides `autoLayout`, `zoomBy`, `resetView`,
-`getPositions`, `getView`, `getPreviewTargets`, `setPreviewTextures`, `stats`,
-and `destroy`. Hosts can lend node preview `GPUTexture` objects created on the
-same device. The graph samples those textures directly, without per-node
-canvases, readback, or stored thumbnail assets.
+`editor.update()` accepts positions, annotations, view state, selection state,
+and callbacks for connection, movement, deletion, duplication, dropping,
+selection, and context actions. The example demonstrates a complete mutable
+host around those callbacks.
 
-Existing nodes retain their presentation coordinates when edges or domain data
-change. Automatic layout is recalculated only for new nodes or when
-`autoLayout()` is explicitly requested.
+## Model boundary
 
-## Rendering boundary
+Each node has a stable `id`, display `label`, optional category and color,
+input/output ports, optional summary rows, and an optional preview descriptor.
+Each edge identifies one output and one input by node and port ID. Corvus
+normalizes and freezes the model passed to the renderer; your application
+retains ownership of its source state.
 
-The visible editor is one WebGPU canvas. Grid, anti-aliased connection ribbons,
-rounded node cards, ports, bitmap-atlas glyphs, selection, and live previews are
-all rendered in that surface. There are no HTML node cards, SVG hit paths, or
-per-node preview canvases.
+Existing nodes keep their presentation coordinates when graph data changes.
+New nodes receive deterministic positions. Call `autoLayout()` when the whole
+graph should be arranged again.
 
-A dedicated module worker performs deterministic layout, scene packing, edge
-sampling, and spatial-index construction, then transfers compact typed arrays
-to the UI thread. WebGPU compute passes transform and cull node shapes and
-tessellate every Bézier connection from live node positions. Pointer hit tests
-use the worker-built spatial index, while drag updates touch only one packed
-node record. The canvas remains viewport-sized even when graph coordinates are
-very large.
+## Editor API
 
-The surrounding product may use ordinary HTML for dock panels and forms; those
-are application UI, not part of the graph surface. Glyphs come from a
-high-resolution ProFont signed-distance atlas uploaded directly to a GPU
-texture, so the renderer has no hidden Canvas2D or DOM fallback. ProFont and
-the generated atlas are MIT-licensed; attribution is recorded in
-`THIRD_PARTY_NOTICES.md`.
+The returned editor provides:
 
-Regenerate the checked-in atlas and exact fixed-width layout metrics with:
+- `update(model, options)`
+- `autoLayout()`
+- `zoomBy(amount)`
+- `resetView()`
+- `getPositions()`
+- `getView()`
+- `getPreviewTargets()`
+- `setPreviewTextures(textures)`
+- `stats()`
+- `destroy()`
+
+Applications with an existing WebGPU runtime can pass `gpuDevice` to
+`createNodeEditor()`. Corvus then creates separate pipelines on the same device
+and can sample compatible preview textures directly.
+
+## Rendering architecture
+
+The visible editor uses one WebGPU canvas. A module worker performs layout,
+scene packing, connection sampling, and spatial-index construction. The UI
+thread uploads compact scene data, while compute passes transform and cull node
+shapes and tessellate connection curves from live positions.
+
+Glyphs come from a high-resolution ProFont signed-distance atlas uploaded to a
+GPU texture. ProFont and the generated atlas are MIT-licensed, with attribution
+recorded in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+Regenerate the checked-in atlas and fixed-width layout metrics with:
 
 ```sh
 python -m pip install -r requirements-font.txt
 pnpm font:generate
 ```
 
-If no `gpuDevice` is supplied, the editor requests a high-performance WebGPU
-device. Applications with an existing GPU runtime should lend that device so
-the graph and application use separate pipelines on one device.
-
 ## Dockable workspace panels
 
 ```js
-import { createDockLayoutController } from "@raykast/webgpu-node-editor";
+import { createDockLayoutController } from "@raykast/corvus";
 
-const panels = createDockLayoutController(workspace, {
-  storageKey: "my-app.workspace.v1",
+const workspace = createDockLayoutController(workspaceElement, {
+  storageKey: "example.workspace.v1",
   panels: [
     {
       id: "library",
@@ -137,32 +187,19 @@ const panels = createDockLayoutController(workspace, {
 });
 ```
 
-The workspace provides `left`, `right`, and `bottom` elements marked with
-`data-dock-id`; each contains `data-dock-tabs` and `data-dock-content`.
-Every panel needs a descendant marked with `data-panel-drag-handle`.
-
-Drag a dock tab or a floating panel header to reveal visual docking zones.
-Dropping on an edge docks the panel; dropping in the center or outside a zone
-floats it. Double-clicking a dock tab also floats it. `Alt` plus an arrow key
-docks left, right, bottom, or floats (up). Floating panels can be moved with
-arrow keys, resized with Shift plus arrow keys or from the lower-right handle,
-and restored with `reset()`. Layout and active tabs are persisted under
-`storageKey`; hosts do not need to build or maintain location selectors.
+The workspace supports left, right, and bottom dock regions, floating panels,
+pointer and keyboard movement, resizing, persisted layouts, active tabs, and a
+visual drop overlay.
 
 ## Headless utilities
 
 `normalizeNodeEditorModel`, `layoutNodeEditorModel`, `buildGraphScene`,
-`sampleCubicEdge`, and `hitTestEdges` are independent of the DOM and WebGPU.
-They are covered by package tests and can be reused by alternate host adapters.
-Socket anchors and wire endpoints share the same packed graph coordinates, so
-zoom and pan cannot introduce endpoint drift.
+`sampleCubicEdge`, and `hitTestEdges` can be used without the DOM or WebGPU.
 
-## Theme boundary
+## Theming
 
-`styles.css` includes a complete, scoped default theme and the ProFont webfont.
-It does not import another package or declare global design-system tokens.
-Override the public `--node-editor-theme-*` properties on `.node-editor` or
-`.node-dock-workspace` to integrate the renderer into another product:
+`styles.css` includes the complete default theme and ProFont webfont. Override
+the scoped `--node-editor-theme-*` properties to integrate Corvus into a host:
 
 ```css
 .node-editor {
@@ -181,4 +218,5 @@ pnpm check
 pnpm dev
 ```
 
-The project is available under the MIT License.
+Corvus is available under the MIT License. Developed by
+[Raykast](https://raykast.com/).

@@ -32,33 +32,81 @@ main {
 
 header {
     display: grid;
-    gap: 0.25rem;
+    gap: 0.75rem;
     padding: 1rem 1.25rem;
     border-bottom: 1px solid #2b373e;
 }
 
+.brand-row {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
 header p,
 header h1,
-header span {
+header span,
+header small {
     margin: 0;
 }
 
-header p {
+header p,
+header a {
     color: #7dd3fc;
+}
+
+header p {
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
 
 header h1 {
-    font-size: 1.35rem;
+    margin-block: 0.2rem;
+    font-size: 1.5rem;
     font-weight: 400;
 }
 
-header span {
+header span,
+header small {
     color: #9babb3;
+}
+
+nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+button {
+    min-height: 2.25rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #42515a;
+    border-radius: 0.35rem;
+    background: #182026;
+    color: #edf4f7;
+    font: inherit;
+    cursor: pointer;
+}
+
+button:hover {
+    border-color: #7dd3fc;
+    background: #202a31;
+}
+
+button:focus-visible {
+    outline: 2px solid #7dd3fc;
+    outline-offset: 2px;
 }
 
 #editor {
     min-width: 0;
     min-height: 0;
+}
+
+@media (max-width: 44rem) {
+    .brand-row {
+        align-items: start;
+        flex-direction: column;
+    }
 }

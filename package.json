@@ -1,7 +1,7 @@
 {
-    "name": "@raykast/webgpu-node-editor",
+    "name": "@raykast/corvus",
     "version": "0.1.0",
-    "description": "Use-case-agnostic, WebGPU-accelerated node editor framework.",
+    "description": "Corvus is a high-performance, WebGPU-accelerated node editor for browser applications.",
     "packageManager": "pnpm@11.9.0",
     "type": "module",
     "main": "./src/index.js",
@@ -30,12 +30,19 @@
         "font:generate": "python scripts/generate-font-atlas.py"
     },
     "keywords": [
+        "corvus",
         "webgpu",
         "node-editor",
         "graph-editor",
         "gpu",
-        "canvas"
+        "canvas",
+        "visual-programming"
     ],
+    "homepage": "https://raykast.com/",
+    "author": {
+        "name": "Raykast",
+        "url": "https://raykast.com/"
+    },
     "license": "MIT",
     "engines": {
         "node": ">=20"

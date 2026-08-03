@@ -1,66 +1,186 @@
-import { createNodeEditor } from "../src/index.js";
+import { createEdgeId, createNodeEditor } from "../src/index.js";
 import "../src/styles.css";
 import "./styles.css";
 
-const model = {
-    id: "standalone-demo",
-    label: "Standalone demo",
+let nextNodeNumber = 1;
+let positions = {};
+let selectedNodeId = null;
+let selectedEdgeId = null;
+let rendererBackend = "starting";
+
+let model = {
+    id: "corvus-example",
+    label: "Corvus example",
     nodes: [
         {
-            id: "noise",
-            label: "Noise",
-            type: "generator",
+            id: "request",
+            label: "Request",
+            type: "source",
             category: "source",
             inputs: [],
-            outputs: [{ id: "value", label: "Value", type: "float" }],
-            preview: { label: "Noise preview", aspectRatio: 1 },
-            summary: [{ label: "scale", value: "4.0" }]
+            outputs: [{ id: "value", label: "Value", type: "value" }],
+            summary: [{ label: "method", value: "GET" }]
         },
         {
-            id: "levels",
-            label: "Levels",
-            type: "filter",
-            category: "transform",
-            inputs: [{ id: "source", label: "Source", type: "float" }],
-            outputs: [{ id: "value", label: "Value", type: "float" }],
-            summary: [{ label: "contrast", value: "1.2" }]
+            id: "validate",
+            label: "Validate",
+            type: "process",
+            category: "process",
+            inputs: [{ id: "input", label: "Input", type: "value" }],
+            outputs: [{ id: "value", label: "Value", type: "value" }],
+            summary: [{ label: "rules", value: "3" }]
         },
         {
-            id: "output",
-            label: "Output",
+            id: "response",
+            label: "Response",
             type: "output",
-            category: "result",
+            category: "output",
             terminal: true,
-            inputs: [{ id: "source", label: "Source", type: "float" }],
+            inputs: [{ id: "input", label: "Input", type: "value" }],
             outputs: [],
-            summary: []
+            summary: [{ label: "status", value: "200" }]
         }
     ],
     edges: [
         {
-            id: "noise-levels",
-            type: "float",
-            from: { nodeId: "noise", port: "value" },
-            to: { nodeId: "levels", port: "source" }
+            id: "request-to-validate",
+            type: "value",
+            from: { nodeId: "request", port: "value" },
+            to: { nodeId: "validate", port: "input" }
         },
         {
-            id: "levels-output",
-            type: "float",
-            from: { nodeId: "levels", port: "value" },
-            to: { nodeId: "output", port: "source" }
+            id: "validate-to-response",
+            type: "value",
+            from: { nodeId: "validate", port: "value" },
+            to: { nodeId: "response", port: "input" }
         }
     ]
 };
 
 const container = document.querySelector("#editor");
+const stats = document.querySelector("#graph-stats");
 const editor = createNodeEditor(container, {
+    onRendererChange(status) {
+        rendererBackend = status.backend === "error"
+            ? "unavailable"
+            : status.backend;
+        updateStats();
+    },
     onError(error) {
+        rendererBackend = "unavailable";
+        updateStats(error.message);
         console.error(error);
     }
 });
 
-editor.update(model, {
-    onPositionsChange(positions) {
-        console.debug("Node positions", positions);
-    }
-});
+function updateStats(message = "") {
+    const details = `${model.nodes.length} nodes · ${model.edges.length} connections · ${rendererBackend}`;
+    stats.textContent = message ? `${details} · ${message}` : details;
+}
+
+function updateEditor() {
+    editor.update(model, {
+        positions,
+        selectedNodeId,
+        selectedEdgeId,
+        onSelectNode(nodeId) {
+            selectedNodeId = nodeId;
+            selectedEdgeId = null;
+        },
+        onSelectEdge(edgeId) {
+            selectedNodeId = null;
+            selectedEdgeId = edgeId;
+        },
+        onClearSelection() {
+            selectedNodeId = null;
+            selectedEdgeId = null;
+        },
+        onMoveNodes(nextPositions) {
+            positions = { ...positions, ...nextPositions };
+        },
+        onPositionsChange(nextPositions) {
+            positions = { ...nextPositions };
+        },
+        onConnectPorts(connection) {
+            const edge = {
+                type: connection.from.type,
+                from: {
+                    nodeId: connection.from.nodeId,
+                    port: connection.from.port
+                },
+                to: {
+                    nodeId: connection.to.nodeId,
+                    port: connection.to.port
+                }
+            };
+            edge.id = createEdgeId(edge);
+            const retainedEdges = model.edges.filter((entry) =>
+                entry.id !== edge.id
+                && !(
+                    entry.to.nodeId === edge.to.nodeId
+                    && entry.to.port === edge.to.port
+                ));
+            model = { ...model, edges: [...retainedEdges, edge] };
+            selectedEdgeId = edge.id;
+            selectedNodeId = null;
+            updateEditor();
+        },
+        onDeleteNode(nodeId) {
+            deleteNodes([nodeId]);
+        },
+        onDeleteNodes(nodeIds) {
+            deleteNodes(nodeIds);
+        },
+        onDeleteEdge(edgeId) {
+            model = {
+                ...model,
+                edges: model.edges.filter((edge) => edge.id !== edgeId)
+            };
+            selectedEdgeId = null;
+            updateEditor();
+        }
+    });
+    updateStats();
+}
+
+function deleteNodes(nodeIds) {
+    const deletedIds = new Set(nodeIds);
+    model = {
+        ...model,
+        nodes: model.nodes.filter((node) => !deletedIds.has(node.id)),
+        edges: model.edges.filter((edge) =>
+            !deletedIds.has(edge.from.nodeId)
+            && !deletedIds.has(edge.to.nodeId))
+    };
+    positions = Object.fromEntries(Object.entries(positions).filter(
+        ([nodeId]) => !deletedIds.has(nodeId)));
+    selectedNodeId = null;
+    updateEditor();
+}
+
+function addNode() {
+    const number = nextNodeNumber++;
+    const id = `step-${number}`;
+    model = {
+        ...model,
+        nodes: [...model.nodes, {
+            id,
+            label: `Step ${number}`,
+            type: "process",
+            category: "process",
+            inputs: [{ id: "input", label: "Input", type: "value" }],
+            outputs: [{ id: "value", label: "Value", type: "value" }],
+            summary: [{ label: "mode", value: "ready" }]
+        }]
+    };
+    selectedNodeId = id;
+    selectedEdgeId = null;
+    updateEditor();
+}
+
+document.querySelector('[data-action="add-node"]').addEventListener("click", addNode);
+document.querySelector('[data-action="auto-layout"]').addEventListener("click", () => editor.autoLayout());
+document.querySelector('[data-action="reset-view"]').addEventListener("click", () => editor.resetView());
+window.addEventListener("beforeunload", () => editor.destroy(), { once: true });
+
+updateEditor();
