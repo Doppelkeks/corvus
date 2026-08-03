@@ -30,4 +30,5 @@ keeps full ownership of graph state. Corvus is developed by
 The first Corvus release provides a dependency-free browser package, a scoped
 default theme, a ProFont GPU atlas, application-owned editing callbacks, a
 dockable selection inspector, nearest-port connection guidance, dockable
-workspace panels, headless graph utilities, and a complete runnable example.
+workspace panels, headless graph utilities, a complete runnable example, and a
+separate 5,000-node WebGPU stress scene with live preparation metrics.

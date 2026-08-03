@@ -39,6 +39,17 @@ pnpm dev
 Open the local URL printed by Vite. The complete host implementation is in
 [`demo/main.js`](demo/main.js), with its page in [`index.html`](index.html).
 
+## Run the stress scene
+
+Open `/stress.html` from the same development server to load a deterministic
+5,000-node graph with 5,930 connections and 142,320 GPU edge segments. The page
+reports generation and preparation time while retaining a single
+viewport-sized canvas. Controls can rebuild the scene with 1,000, 5,000, or
+10,000 nodes.
+
+The generator is isolated in [`demo/stress-scene.js`](demo/stress-scene.js), so
+the large graph is reproducible and does not inflate the normal example.
+
 ## Install
 
 ```sh

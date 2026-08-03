@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#202328" />
+        <meta name="description" content="Corvus WebGPU node editor stress scene with thousands of interactive nodes." />
+        <title>Corvus — WebGPU Stress Scene</title>
+    </head>
+    <body>
+        <main class="stress-shell">
+            <header class="demo-header">
+                <div class="brand-row">
+                    <div>
+                        <p>Developed by <a href="https://raykast.com/">Raykast</a></p>
+                        <h1>Corvus stress scene</h1>
+                        <span id="stress-status" aria-live="polite">Preparing the graph…</span>
+                    </div>
+                    <nav class="stress-controls" aria-label="Stress scene controls">
+                        <a class="demo-action" href="/">Standard scene</a>
+                        <label class="stress-size-control" for="stress-size">
+                            Scene size
+                            <select id="stress-size">
+                                <option value="1000">1,000 nodes</option>
+                                <option value="5000" selected>5,000 nodes</option>
+                                <option value="10000">10,000 nodes</option>
+                            </select>
+                        </label>
+                        <button type="button" data-action="rebuild">Rebuild</button>
+                    </nav>
+                </div>
+                <dl class="stress-metrics" aria-label="Stress scene metrics">
+                    <div><dt>Nodes</dt><dd data-metric="nodes">—</dd></div>
+                    <div><dt>Connections</dt><dd data-metric="edges">—</dd></div>
+                    <div><dt>GPU segments</dt><dd data-metric="segments">—</dd></div>
+                    <div><dt>Prepared</dt><dd data-metric="prepare">—</dd></div>
+                </dl>
+            </header>
+            <section id="editor" aria-label="Corvus WebGPU stress scene"></section>
+        </main>
+        <script type="module" src="/demo/stress-main.js"></script>
+    </body>
+</html>

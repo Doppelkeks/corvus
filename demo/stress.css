@@ -1,0 +1,77 @@
+.stress-shell {
+    height: calc(100vh - 2rem);
+    min-height: 40rem;
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.stress-shell #editor {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.stress-controls,
+.stress-size-control {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.stress-size-control {
+    color: #a9b0b8;
+    font-size: 0.875rem;
+}
+
+.stress-size-control select {
+    min-height: 2.25rem;
+    padding: 0.35rem 2rem 0.35rem 0.7rem;
+    border: 1px solid #4b5158;
+    border-radius: 0.35rem;
+    background: #30353b;
+    color: #f1f3f5;
+    font: inherit;
+}
+
+.stress-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(7rem, 1fr));
+    margin: 0;
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid #3b4046;
+    border-radius: 0.45rem;
+    background: #3b4046;
+}
+
+.stress-metrics div {
+    display: grid;
+    gap: 0.2rem;
+    padding: 0.65rem 0.8rem;
+    background: #202328;
+}
+
+.stress-metrics dt {
+    color: #8f979f;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.stress-metrics dd {
+    margin: 0;
+    color: #f1f3f5;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+@media (max-width: 52rem) {
+    .stress-controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .stress-metrics {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

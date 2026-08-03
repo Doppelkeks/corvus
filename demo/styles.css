@@ -79,7 +79,10 @@ nav {
     gap: 0.5rem;
 }
 
-button {
+button,
+.demo-action {
+    display: inline-grid;
+    align-items: center;
     min-height: 2.25rem;
     padding: 0.4rem 0.75rem;
     border: 1px solid #4b5158;
@@ -88,14 +91,17 @@ button {
     color: #f1f3f5;
     font: inherit;
     cursor: pointer;
+    text-decoration: none;
 }
 
-button:hover {
+button:hover,
+.demo-action:hover {
     border-color: #858e98;
     background: #3a4047;
 }
 
-button:focus-visible {
+button:focus-visible,
+.demo-action:focus-visible {
     outline: 2px solid #b8c1ca;
     outline-offset: 2px;
 }
