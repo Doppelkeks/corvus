@@ -70,45 +70,39 @@ struct Camera {
 @group(0) @binding(2) var<storage, read> inputShapes: array<vec4f>;
 @group(0) @binding(3) var<storage, read_write> outputShapes: array<vec4f>;
 @group(0) @binding(4) var<storage, read> nodeSelection: array<u32>;
+@group(0) @binding(5) var<storage, read> visibleShapes: array<u32>;
 
 @compute @workgroup_size(64)
 fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
-    let index = invocation.x;
-    if (index >= u32(camera.counts.y)) {
+    let visibleIndex = invocation.x;
+    if (visibleIndex >= u32(camera.counts.y)) {
         return;
     }
-    let base = index * 4u;
-    let localRect = inputShapes[base];
-    let fill = inputShapes[base + 1u];
-    var border = inputShapes[base + 2u];
-    let shapeInfo = inputShapes[base + 3u];
+    let shapeIndex = visibleShapes[visibleIndex];
+    let inputBase = shapeIndex * 4u;
+    let outputBase = visibleIndex * 4u;
+    let localRect = inputShapes[inputBase];
+    let fill = inputShapes[inputBase + 1u];
+    var border = inputShapes[inputBase + 2u];
+    let shapeInfo = inputShapes[inputBase + 3u];
     let nodeIndex = u32(shapeInfo.w);
     let node = nodes[nodeIndex];
     let rect = vec4f(node.xy + localRect.xy, localRect.zw);
-    let viewportMin = camera.view.zw;
-    let viewportMax = viewportMin + camera.view.xy / camera.state.x;
-    let visible = rect.x + rect.z >= viewportMin.x - 20.0
-        && rect.y + rect.w >= viewportMin.y - 20.0
-        && rect.x <= viewportMax.x + 20.0
-        && rect.y <= viewportMax.y + 20.0;
     var nextFill = fill;
-    if (!visible) {
-        nextFill.a = 0.0;
-        border.a = 0.0;
-    } else if (
+    if (
         (shapeInfo.z == 4.0 && nodeSelection[nodeIndex] != 0u)
-        || f32(index) == camera.display.y
-        || f32(index) == camera.display.z
+        || f32(shapeIndex) == camera.display.y
+        || f32(shapeIndex) == camera.display.z
     ) {
         border = camera.accent;
-        if (f32(index) == camera.display.z) {
+        if (f32(shapeIndex) == camera.display.z) {
             nextFill = vec4f(camera.accent.rgb, 0.28);
         }
     }
-    outputShapes[base] = rect;
-    outputShapes[base + 1u] = nextFill;
-    outputShapes[base + 2u] = border;
-    outputShapes[base + 3u] = shapeInfo;
+    outputShapes[outputBase] = rect;
+    outputShapes[outputBase + 1u] = nextFill;
+    outputShapes[outputBase + 2u] = border;
+    outputShapes[outputBase + 3u] = shapeInfo;
 }
 `;
 
@@ -282,6 +276,7 @@ struct Camera {
 @group(0) @binding(1) var<storage, read> nodes: array<vec4f>;
 @group(0) @binding(2) var<storage, read> edges: array<vec4f>;
 @group(0) @binding(3) var<storage, read_write> vertices: array<vec4f>;
+@group(0) @binding(4) var<storage, read> visibleEdges: array<u32>;
 
 fn cubic(a: vec2f, b: vec2f, c: vec2f, d: vec2f, t: f32) -> vec2f {
     let inverse = 1.0 - t;
@@ -307,10 +302,11 @@ fn writeVertex(index: u32, position: vec2f, color: vec4f, signedDistance: f32, h
 fn computeMain(@builtin(global_invocation_id) invocation: vec3u) {
     let segmentIndex = invocation.x;
     let segmentCount = 24u;
-    let edgeIndex = segmentIndex / segmentCount;
-    if (edgeIndex >= u32(camera.counts.z)) {
+    let visibleEdgeIndex = segmentIndex / segmentCount;
+    if (visibleEdgeIndex >= u32(camera.counts.z)) {
         return;
     }
+    let edgeIndex = visibleEdges[visibleEdgeIndex];
     let segment = segmentIndex % segmentCount;
     let base = edgeIndex * 3u;
     let first = edges[base];
@@ -430,6 +426,7 @@ struct Camera {
 @group(0) @binding(2) var<storage, read> glyphs: array<vec4f>;
 @group(0) @binding(3) var atlasSampler: sampler;
 @group(0) @binding(4) var atlasTexture: texture_2d<f32>;
+@group(0) @binding(5) var<storage, read> visibleGlyphs: array<u32>;
 
 struct VertexOutput {
     @builtin(position) position: vec4f,
@@ -447,7 +444,7 @@ fn vertexMain(
         vec2f(0.0, 1.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0)
     );
     let corner = corners[vertexIndex];
-    let base = instanceIndex * 4u;
+    let base = visibleGlyphs[instanceIndex] * 4u;
     let rect = glyphs[base];
     let uvRect = glyphs[base + 1u];
     let glyphInfo = glyphs[base + 3u];

@@ -24,16 +24,23 @@ describe("GPU-only graph surface architecture", () => {
         expect(fontAtlas).toContain("queue.writeTexture");
     });
 
-    it("uses worker preparation and compute-driven geometry", () => {
+    it("uses worker preparation and visible-only compute geometry", () => {
         const editor = source("./node-editor.js");
         const surface = source("./webgpu-graph-surface.js");
+        const shaders = source("./gpu-graph-shaders.js");
         const worker = source("./graph-layout.worker.js");
         expect(editor).toContain("GraphWorkerClient");
         expect(surface.match(/createComputePipeline/g)).toHaveLength(2);
-        expect(surface).toContain("edge tessellation");
-        expect(surface).toContain("shape transform and cull");
-        expect(surface).toContain("underlayShapeCount");
-        expect(surface).toContain("pass.draw(6, overlayShapeCount, 0, underlayShapeCount)");
+        expect(surface).toContain("visible edge tessellation");
+        expect(surface).toContain("visible shape transform");
+        expect(surface).toContain("visibleShapeIndexBuffer");
+        expect(surface).toContain("visibleGlyphIndexBuffer");
+        expect(surface).toContain("visibleEdgeIndexBuffer");
+        expect(surface).toContain("graphEdgeVisible");
+        expect(surface).toContain("backdropShapeCount + foregroundUnderlayCount");
+        expect(shaders).toContain("visibleShapes[visibleIndex]");
+        expect(shaders).toContain("visibleEdges[visibleEdgeIndex]");
+        expect(shaders).toContain("visibleGlyphs[instanceIndex]");
         expect(worker).toContain("buildGraphScene");
         expect(worker).toContain("transferableScene");
     });

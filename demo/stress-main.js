@@ -11,13 +11,30 @@ const rebuildButton = document.querySelector('[data-action="rebuild"]');
 const status = document.querySelector("#stress-status");
 const metrics = {
     nodes: document.querySelector('[data-metric="nodes"]'),
+    visibleNodes: document.querySelector('[data-metric="visible-nodes"]'),
     edges: document.querySelector('[data-metric="edges"]'),
+    visibleEdges: document.querySelector('[data-metric="visible-edges"]'),
     segments: document.querySelector('[data-metric="segments"]'),
     prepare: document.querySelector('[data-metric="prepare"]')
 };
 let positions = {};
 let rendererBackend = "starting";
 let loadRevision = 0;
+let metricFrame = 0;
+
+function updateRendererMetrics() {
+    const renderer = editor.stats();
+    metrics.nodes.textContent = number.format(renderer.nodeCount);
+    metrics.visibleNodes.textContent = number.format(renderer.visibleNodeCount);
+    metrics.edges.textContent = number.format(renderer.edgeCount);
+    metrics.visibleEdges.textContent = number.format(renderer.visibleEdgeCount);
+    metrics.segments.textContent = number.format(renderer.visibleEdgeSegments);
+}
+
+function scheduleRendererMetrics() {
+    cancelAnimationFrame(metricFrame);
+    metricFrame = requestAnimationFrame(updateRendererMetrics);
+}
 
 const editor = createNodeEditor(container, {
     accent: "#b8c1ca",
@@ -48,6 +65,9 @@ async function loadScene() {
     editor.update(scene.model, {
         positions,
         viewState: { zoom: 0.5, scrollLeft: 0, scrollTop: 0 },
+        onViewChange() {
+            scheduleRendererMetrics();
+        },
         onPositionsChange(nextPositions) {
             positions = { ...nextPositions };
         }
@@ -56,18 +76,18 @@ async function loadScene() {
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (revision !== loadRevision) return;
     const preparationTime = performance.now() - preparationStarted;
-    const renderer = editor.stats();
-    metrics.nodes.textContent = number.format(renderer.nodeCount);
-    metrics.edges.textContent = number.format(renderer.edgeCount);
-    metrics.segments.textContent = number.format(renderer.edgeSegments);
+    updateRendererMetrics();
     metrics.prepare.textContent = `${preparationTime.toFixed(1)} ms`;
-    status.textContent = `${rendererBackend} · generated in ${generationTime.toFixed(1)} ms · one viewport-sized canvas`;
+    status.textContent = `${rendererBackend} · viewport culling active · generated in ${generationTime.toFixed(1)} ms`;
     sizeControl.disabled = false;
     rebuildButton.disabled = false;
 }
 
 sizeControl.addEventListener("change", loadScene);
 rebuildButton.addEventListener("click", loadScene);
-window.addEventListener("beforeunload", () => editor.destroy(), { once: true });
+window.addEventListener("beforeunload", () => {
+    cancelAnimationFrame(metricFrame);
+    editor.destroy();
+}, { once: true });
 
 loadScene();

@@ -11,6 +11,7 @@ Corvus is open source and developed by [Raykast](https://raykast.com/).
 
 - One viewport-sized WebGPU canvas, even when graph coordinates are very large.
 - GPU-rendered cards, text, ports, connection ribbons, selection, and previews.
+- Stable viewport culling submits only visible shapes, glyphs, previews, and edges.
 - Deterministic layout and scene packing in a dedicated module worker.
 - Spatially indexed pointer hit testing and compact typed-array scene data.
 - Direct sampling of host-provided `GPUTexture` previews without readback.
@@ -42,10 +43,10 @@ Open the local URL printed by Vite. The complete host implementation is in
 ## Run the stress scene
 
 Open `/stress.html` from the same development server to load a deterministic
-5,000-node graph with 5,930 connections and 142,320 GPU edge segments. The page
-reports generation and preparation time while retaining a single
-viewport-sized canvas. Controls can rebuild the scene with 1,000, 5,000, or
-10,000 nodes.
+5,000-node graph with 5,930 connections and 142,320 potential edge segments.
+The page reports generation, preparation, and live visible-work counts while
+viewport culling submits only on-screen nodes, text, previews, and connections
+to the GPU. Controls can rebuild the scene with 1,000, 5,000, or 10,000 nodes.
 
 The generator is isolated in [`demo/stress-scene.js`](demo/stress-scene.js), so
 the large graph is reproducible and does not inflate the normal example.
@@ -166,9 +167,11 @@ and can sample compatible preview textures directly.
 ## Rendering architecture
 
 The visible editor uses one WebGPU canvas. A module worker performs layout,
-scene packing, connection sampling, and spatial-index construction. The UI
-thread uploads compact scene data, while compute passes transform and cull node
-shapes and tessellate connection curves from live positions.
+scene packing, connection sampling, and spatial-index construction. Each
+invalidated frame builds stable compact lists from live viewport bounds, so
+off-screen shapes, glyphs, previews, and connections are not submitted. Curves
+crossing the viewport remain included even when both endpoint nodes are outside.
+Compute passes transform only visible shapes and tessellate only visible curves.
 
 Glyphs come from a high-resolution ProFont signed-distance atlas uploaded to a
 GPU texture. ProFont and the generated atlas are MIT-licensed, with attribution

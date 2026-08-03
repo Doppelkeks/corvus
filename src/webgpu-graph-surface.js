@@ -1,6 +1,11 @@
 import { createGpuFontAtlas } from "./gpu-font-atlas.js";
 import { resolveNodeEditorAccent } from "./node-editor-theme.js";
 import {
+    graphEdgeVisible,
+    graphRectVisible,
+    graphViewportBounds
+} from "./viewport-culling.js";
+import {
     EDGE_COMPUTE_SHADER,
     EDGE_RENDER_SHADER,
     GLYPH_SHADER,
@@ -34,6 +39,11 @@ function createBuffer(device, label, data, usage) {
     const buffer = device.createBuffer({ label, size, usage });
     if (data.byteLength > 0) device.queue.writeBuffer(buffer, 0, data);
     return buffer;
+}
+
+function createEmptyBuffer(device, label, byteLength, usage) {
+    const size = Math.max(16, Math.ceil(byteLength / 4) * 4);
+    return device.createBuffer({ label, size, usage });
 }
 
 function shader(device, label, code) {
@@ -83,6 +93,14 @@ export class WebGpuGraphSurface {
         this.dynamicEdgeVisible = false;
         this.previewTextures = new Map();
         this.previewBindGroups = new WeakMap();
+        this.visibility = {
+            nodeCount: 0,
+            transformCount: 0,
+            shapeCount: 0,
+            shapeBuckets: [0, 0, 0],
+            glyphCount: 0,
+            edgeCount: 0
+        };
         this.sceneBuffers = [];
         this.frame = 0;
         this.destroyed = false;
@@ -319,6 +337,7 @@ export class WebGpuGraphSurface {
             scene.nodeRecords.length + 4
         );
         gpuNodeRecords.set(scene.nodeRecords);
+        this.gpuNodeRecords = gpuNodeRecords;
         this.nodeBuffer = createBuffer(
             this.device,
             "Node editor nodes",
@@ -379,6 +398,26 @@ export class WebGpuGraphSurface {
             scene.previews,
             storage
         );
+        const shapeCount = scene.shapes.length / 16;
+        const glyphCount = scene.glyphs.length / 16;
+        this.visibleShapeIndexBuffer = createEmptyBuffer(
+            this.device,
+            "Node editor visible shape indexes",
+            shapeCount * Uint32Array.BYTES_PER_ELEMENT,
+            storage
+        );
+        this.visibleGlyphIndexBuffer = createEmptyBuffer(
+            this.device,
+            "Node editor visible glyph indexes",
+            glyphCount * Uint32Array.BYTES_PER_ELEMENT,
+            storage
+        );
+        this.visibleEdgeIndexBuffer = createEmptyBuffer(
+            this.device,
+            "Node editor visible edge indexes",
+            (this.staticEdgeCount + 1) * Uint32Array.BYTES_PER_ELEMENT,
+            storage
+        );
         this.sceneBuffers = [
             this.nodeBuffer,
             this.nodeSelectionBuffer,
@@ -387,12 +426,59 @@ export class WebGpuGraphSurface {
             this.edgeBuffer,
             this.edgeVertexBuffer,
             this.glyphBuffer,
-            this.previewBuffer
+            this.previewBuffer,
+            this.visibleShapeIndexBuffer,
+            this.visibleGlyphIndexBuffer,
+            this.visibleEdgeIndexBuffer
         ];
+        this.#prepareVisibilityState();
         this.#createSceneBindGroups();
         this.#writeNodeSelection();
         this.#writeConnectionPreview();
         this.render();
+    }
+
+    #prepareVisibilityState() {
+        const scene = this.scene;
+        const transformCount = scene.nodeRecords.length / 4;
+        const shapeCount = scene.shapes.length / 16;
+        const glyphCount = scene.glyphs.length / 16;
+        const shapeIndicesByNode = Array.from(
+            { length: transformCount },
+            () => []
+        );
+        for (let index = 0; index < shapeCount; index += 1) {
+            const nodeIndex = scene.shapes[index * 16 + 15];
+            shapeIndicesByNode[nodeIndex].push(index);
+        }
+        const glyphIndicesByNode = Array.from(
+            { length: transformCount },
+            () => []
+        );
+        for (let index = 0; index < glyphCount; index += 1) {
+            const nodeIndex = scene.glyphs[index * 16 + 12];
+            glyphIndicesByNode[nodeIndex].push(index);
+        }
+        const backdropCount = scene.backdropShapeCount ?? 0;
+        const underlayCount = scene.underlayShapeCount ?? shapeCount;
+        this.shapeIndicesByNode = shapeIndicesByNode;
+        this.glyphIndicesByNode = glyphIndicesByNode;
+        this.visibleTransformFlags = new Uint8Array(transformCount);
+        this.visibleShapeBuckets = [
+            new Uint32Array(backdropCount),
+            new Uint32Array(Math.max(0, underlayCount - backdropCount)),
+            new Uint32Array(Math.max(0, shapeCount - underlayCount))
+        ];
+        this.visibleGlyphIndices = new Uint32Array(glyphCount);
+        this.visibleEdgeIndices = new Uint32Array(this.staticEdgeCount + 1);
+        this.visibility = {
+            nodeCount: 0,
+            transformCount: 0,
+            shapeCount: 0,
+            shapeBuckets: [0, 0, 0],
+            glyphCount: 0,
+            edgeCount: 0
+        };
     }
 
     #createSceneBindGroups() {
@@ -405,7 +491,8 @@ export class WebGpuGraphSurface {
                 { binding: 1, resource: { buffer: this.nodeBuffer } },
                 { binding: 2, resource: { buffer: this.shapeInputBuffer } },
                 { binding: 3, resource: { buffer: this.shapeOutputBuffer } },
-                { binding: 4, resource: { buffer: this.nodeSelectionBuffer } }
+                { binding: 4, resource: { buffer: this.nodeSelectionBuffer } },
+                { binding: 5, resource: { buffer: this.visibleShapeIndexBuffer } }
             ]
         });
         this.shapeBindGroup = device.createBindGroup({
@@ -423,7 +510,8 @@ export class WebGpuGraphSurface {
                 { binding: 0, resource: { buffer: this.cameraBuffer } },
                 { binding: 1, resource: { buffer: this.nodeBuffer } },
                 { binding: 2, resource: { buffer: this.edgeBuffer } },
-                { binding: 3, resource: { buffer: this.edgeVertexBuffer } }
+                { binding: 3, resource: { buffer: this.edgeVertexBuffer } },
+                { binding: 4, resource: { buffer: this.visibleEdgeIndexBuffer } }
             ]
         });
         this.edgeBindGroup = device.createBindGroup({
@@ -439,7 +527,8 @@ export class WebGpuGraphSurface {
                 { binding: 1, resource: { buffer: this.nodeBuffer } },
                 { binding: 2, resource: { buffer: this.glyphBuffer } },
                 { binding: 3, resource: this.fontAtlas.sampler },
-                { binding: 4, resource: this.fontAtlas.view }
+                { binding: 4, resource: this.fontAtlas.view },
+                { binding: 5, resource: { buffer: this.visibleGlyphIndexBuffer } }
             ]
         });
         this.previewSceneBindGroup = device.createBindGroup({
@@ -511,6 +600,7 @@ export class WebGpuGraphSurface {
             0,
             0
         ]);
+        this.gpuNodeRecords.set(virtualNode, virtualNodeIndex * 4);
         this.device.queue.writeBuffer(
             this.nodeBuffer,
             virtualNodeIndex * 4 * Float32Array.BYTES_PER_ELEMENT,
@@ -531,6 +621,7 @@ export class WebGpuGraphSurface {
             0,
             0
         ]);
+        this.gpuEdgeRecords.set(record, this.staticEdgeCount * 12);
         this.device.queue.writeBuffer(
             this.edgeBuffer,
             this.staticEdgeCount
@@ -548,6 +639,8 @@ export class WebGpuGraphSurface {
         const offset = index * 4;
         this.scene.nodeRecords[offset] = position.x;
         this.scene.nodeRecords[offset + 1] = position.y;
+        this.gpuNodeRecords[offset] = position.x;
+        this.gpuNodeRecords[offset + 1] = position.y;
         this.device.queue.writeBuffer(
             this.nodeBuffer,
             offset * Float32Array.BYTES_PER_ELEMENT,
@@ -581,6 +674,131 @@ export class WebGpuGraphSurface {
         if (!this.scene || !this.device || this.destroyed) return;
         cancelAnimationFrame(this.frame);
         this.frame = requestAnimationFrame(() => this.#draw());
+    }
+
+    #cullScene() {
+        const scene = this.scene;
+        const nodeRecords = this.gpuNodeRecords;
+        const transformCount = scene.nodeRecords.length / 4;
+        const modelNodeCount = scene.hitNodes.length;
+        const backdropBoundary = scene.backdropShapeCount ?? 0;
+        const underlayBoundary = scene.underlayShapeCount
+            ?? scene.shapes.length / 16;
+        const bounds = graphViewportBounds(
+            this.view,
+            this.canvas.clientWidth,
+            this.canvas.clientHeight
+        );
+        let visibleNodeCount = 0;
+        let visibleTransformCount = 0;
+        let visibleBackdropCount = 0;
+        let visibleUnderlayCount = 0;
+        let visibleOverlayCount = 0;
+        let visibleGlyphCount = 0;
+
+        for (let nodeIndex = 0; nodeIndex < transformCount; nodeIndex += 1) {
+            const offset = nodeIndex * 4;
+            const visible = graphRectVisible(
+                nodeRecords[offset],
+                nodeRecords[offset + 1],
+                nodeRecords[offset + 2],
+                nodeRecords[offset + 3],
+                bounds
+            );
+            this.visibleTransformFlags[nodeIndex] = visible ? 1 : 0;
+            if (!visible) continue;
+            visibleTransformCount += 1;
+            if (nodeIndex < modelNodeCount) visibleNodeCount += 1;
+
+            const shapeIndexes = this.shapeIndicesByNode[nodeIndex];
+            for (let index = 0; index < shapeIndexes.length; index += 1) {
+                const shapeIndex = shapeIndexes[index];
+                if (shapeIndex < backdropBoundary) {
+                    this.visibleShapeBuckets[0][visibleBackdropCount] = shapeIndex;
+                    visibleBackdropCount += 1;
+                } else if (shapeIndex < underlayBoundary) {
+                    this.visibleShapeBuckets[1][visibleUnderlayCount] = shapeIndex;
+                    visibleUnderlayCount += 1;
+                } else {
+                    this.visibleShapeBuckets[2][visibleOverlayCount] = shapeIndex;
+                    visibleOverlayCount += 1;
+                }
+            }
+
+            const glyphIndexes = this.glyphIndicesByNode[nodeIndex];
+            for (let index = 0; index < glyphIndexes.length; index += 1) {
+                this.visibleGlyphIndices[visibleGlyphCount] = glyphIndexes[index];
+                visibleGlyphCount += 1;
+            }
+        }
+
+        const shapeCounts = [
+            visibleBackdropCount,
+            visibleUnderlayCount,
+            visibleOverlayCount
+        ];
+        let visibleShapeCount = 0;
+        // Stable per-layer ordering prevents overlapping translucent cards from
+        // changing appearance as the visible set changes.
+        for (let bucket = 0; bucket < shapeCounts.length; bucket += 1) {
+            const count = shapeCounts[bucket];
+            if (count > 1) {
+                this.visibleShapeBuckets[bucket].subarray(0, count).sort();
+            }
+            if (count > 0) {
+                this.device.queue.writeBuffer(
+                    this.visibleShapeIndexBuffer,
+                    visibleShapeCount * Uint32Array.BYTES_PER_ELEMENT,
+                    this.visibleShapeBuckets[bucket].subarray(0, count)
+                );
+            }
+            visibleShapeCount += count;
+        }
+
+        if (visibleGlyphCount > 1) {
+            this.visibleGlyphIndices.subarray(0, visibleGlyphCount).sort();
+        }
+        if (visibleGlyphCount > 0) {
+            this.device.queue.writeBuffer(
+                this.visibleGlyphIndexBuffer,
+                0,
+                this.visibleGlyphIndices.subarray(0, visibleGlyphCount)
+            );
+        }
+
+        const edgeCount = this.staticEdgeCount
+            + (this.dynamicEdgeVisible ? 1 : 0);
+        let visibleEdgeCount = 0;
+        // Conservative curve bounds keep viewport-crossing connections even
+        // when neither endpoint node itself is visible.
+        for (let edgeIndex = 0; edgeIndex < edgeCount; edgeIndex += 1) {
+            if (!graphEdgeVisible(
+                this.gpuNodeRecords,
+                this.gpuEdgeRecords,
+                edgeIndex,
+                bounds
+            )) {
+                continue;
+            }
+            this.visibleEdgeIndices[visibleEdgeCount] = edgeIndex;
+            visibleEdgeCount += 1;
+        }
+        if (visibleEdgeCount > 0) {
+            this.device.queue.writeBuffer(
+                this.visibleEdgeIndexBuffer,
+                0,
+                this.visibleEdgeIndices.subarray(0, visibleEdgeCount)
+            );
+        }
+
+        this.visibility.nodeCount = visibleNodeCount;
+        this.visibility.transformCount = visibleTransformCount;
+        this.visibility.shapeCount = visibleShapeCount;
+        this.visibility.shapeBuckets[0] = visibleBackdropCount;
+        this.visibility.shapeBuckets[1] = visibleUnderlayCount;
+        this.visibility.shapeBuckets[2] = visibleOverlayCount;
+        this.visibility.glyphCount = visibleGlyphCount;
+        this.visibility.edgeCount = visibleEdgeCount;
     }
 
     #cameraData() {
@@ -617,9 +835,9 @@ export class WebGpuGraphSurface {
             selectedEdge,
             hoveredEdge,
             this.scene.nodeRecords.length / 4,
-            this.scene.shapes.length / 16,
-            this.staticEdgeCount + (this.dynamicEdgeVisible ? 1 : 0),
-            this.scene.glyphs.length / 16,
+            this.visibility.shapeCount,
+            this.visibility.edgeCount,
+            this.visibility.glyphCount,
             globalThis.devicePixelRatio || 1,
             selectedPortShape,
             highlightedPortShape,
@@ -630,6 +848,7 @@ export class WebGpuGraphSurface {
 
     #draw() {
         if (!this.scene || this.destroyed) return;
+        this.#cullScene();
         this.device.queue.writeBuffer(
             this.cameraBuffer,
             0,
@@ -638,12 +857,11 @@ export class WebGpuGraphSurface {
         const encoder = this.device.createCommandEncoder({
             label: "Node editor frame"
         });
-        const shapeCount = this.scene.shapes.length / 16;
-        const edgeCount = this.staticEdgeCount
-            + (this.dynamicEdgeVisible ? 1 : 0);
+        const shapeCount = this.visibility.shapeCount;
+        const edgeCount = this.visibility.edgeCount;
         if (shapeCount > 0) {
             const pass = encoder.beginComputePass({
-                label: "Node editor shape transform and cull"
+                label: "Node editor visible shape transform"
             });
             pass.setPipeline(this.shapeComputePipeline);
             pass.setBindGroup(0, this.shapeComputeBindGroup);
@@ -652,7 +870,7 @@ export class WebGpuGraphSurface {
         }
         if (edgeCount > 0) {
             const pass = encoder.beginComputePass({
-                label: "Node editor edge tessellation"
+                label: "Node editor visible edge tessellation"
             });
             pass.setPipeline(this.edgeComputePipeline);
             pass.setBindGroup(0, this.edgeComputeBindGroup);
@@ -674,13 +892,7 @@ export class WebGpuGraphSurface {
         pass.setPipeline(this.gridPipeline);
         pass.setBindGroup(0, this.gridBindGroup);
         pass.draw(3);
-        const backdropShapeCount = Math.max(
-            0,
-            Math.min(
-                shapeCount,
-                this.scene.backdropShapeCount ?? 0
-            )
-        );
+        const backdropShapeCount = this.visibility.shapeBuckets[0];
         if (backdropShapeCount > 0) {
             pass.setPipeline(this.shapePipeline);
             pass.setBindGroup(0, this.shapeBindGroup);
@@ -694,35 +906,30 @@ export class WebGpuGraphSurface {
                 edgeCount * EDGE_SEGMENTS * EDGE_VERTICES_PER_SEGMENT
             );
         }
-        const underlayShapeCount = Math.max(
-            0,
-            Math.min(
-                shapeCount,
-                this.scene.underlayShapeCount ?? shapeCount
-            )
-        );
-        if (underlayShapeCount > 0) {
-            const foregroundUnderlayCount =
-                underlayShapeCount - backdropShapeCount;
+        const foregroundUnderlayCount = this.visibility.shapeBuckets[1];
+        if (foregroundUnderlayCount > 0) {
             pass.setPipeline(this.shapePipeline);
             pass.setBindGroup(0, this.shapeBindGroup);
-            if (foregroundUnderlayCount > 0) {
-                pass.draw(
-                    6,
-                    foregroundUnderlayCount,
-                    0,
-                    backdropShapeCount
-                );
-            }
+            pass.draw(
+                6,
+                foregroundUnderlayCount,
+                0,
+                backdropShapeCount
+            );
         }
         this.#drawPreviews(pass);
-        const overlayShapeCount = shapeCount - underlayShapeCount;
+        const overlayShapeCount = this.visibility.shapeBuckets[2];
         if (overlayShapeCount > 0) {
             pass.setPipeline(this.shapePipeline);
             pass.setBindGroup(0, this.shapeBindGroup);
-            pass.draw(6, overlayShapeCount, 0, underlayShapeCount);
+            pass.draw(
+                6,
+                overlayShapeCount,
+                0,
+                backdropShapeCount + foregroundUnderlayCount
+            );
         }
-        const glyphCount = this.scene.glyphs.length / 16;
+        const glyphCount = this.visibility.glyphCount;
         if (glyphCount > 0) {
             pass.setPipeline(this.glyphPipeline);
             pass.setBindGroup(0, this.glyphBindGroup);
@@ -756,6 +963,7 @@ export class WebGpuGraphSurface {
         const previewCount = this.scene.previews.length / 8;
         for (let index = 0; index < previewCount; index += 1) {
             const nodeIndex = this.scene.previews[index * 8 + 4];
+            if (!this.visibleTransformFlags[nodeIndex]) continue;
             const node = this.scene.hitNodes[nodeIndex];
             const entry = this.previewTextures.get(node.id);
             const texture = entry?.texture ?? entry;
@@ -782,8 +990,15 @@ export class WebGpuGraphSurface {
         return Object.freeze({
             backend: this.device ? "webgpu" : "initializing",
             compute: true,
+            culling: "viewport",
             workerPrepared: true,
             edgeSegments: edgeCount * EDGE_SEGMENTS,
+            visibleNodeCount: this.visibility.nodeCount,
+            visibleTransformCount: this.visibility.transformCount,
+            visibleShapeCount: this.visibility.shapeCount,
+            visibleGlyphCount: this.visibility.glyphCount,
+            visibleEdgeCount: this.visibility.edgeCount,
+            visibleEdgeSegments: this.visibility.edgeCount * EDGE_SEGMENTS,
             annotationCount: this.scene?.hitAnnotations?.length ?? 0
         });
     }
