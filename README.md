@@ -49,9 +49,10 @@ The page reports generation, first-presentation, complete-preparation, and live
 visible-work counts. Large scenes present a bounded initial viewport while the
 worker packs the complete graph; viewport culling then submits only on-screen
 nodes, text, previews, and connections to the GPU. Controls can rebuild the
-scene with 1,000, 5,000, or 10,000 nodes. Connections remain selectable and can
-be deleted with Delete or Backspace; the updated scene is progressively
-re-packed without blocking interaction.
+scene with 1,000, 5,000, or 10,000 nodes. Nodes can be moved, connected,
+multi-selected, deleted, duplicated, copied, and pasted; connections can also
+be selected and deleted with Delete or Backspace. Every mutation is
+progressively re-packed without blocking interaction.
 
 The generator is isolated in [`demo/stress-scene.js`](demo/stress-scene.js), so
 the large graph is reproducible and does not inflate the normal example.

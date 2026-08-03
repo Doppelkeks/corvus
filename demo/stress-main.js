@@ -3,8 +3,11 @@ import "../src/styles.css";
 import "./styles.css";
 import "./stress.css";
 import {
+    connectStressScenePorts,
     createStressScene,
-    removeStressSceneEdge
+    duplicateStressSceneNodes,
+    removeStressSceneEdge,
+    removeStressSceneNodes
 } from "./stress-scene.js";
 
 const number = new Intl.NumberFormat("en-US");
@@ -26,6 +29,8 @@ let model = null;
 let rendererBackend = "starting";
 let loadRevision = 0;
 let metricFrame = 0;
+let duplicationIndex = 0;
+let copiedNodeIds = [];
 
 function updateRendererMetrics() {
     const renderer = editor.stats();
@@ -55,23 +60,49 @@ const editor = createNodeEditor(container, {
     }
 });
 
-function renderStressModel(revision, viewState, selectedEdgeId = undefined) {
+function reportMutationError(error) {
+    status.textContent = error.message;
+    console.error(error);
+}
+
+function renderStressModel(revision, viewState, selection = {}) {
     editor.update(model, {
         positions,
         viewState,
-        selectedEdgeId,
+        ...selection,
         onViewChange() {
             scheduleRendererMetrics();
         },
         onPositionsChange(nextPositions) {
             positions = { ...nextPositions };
         },
+        onConnectPorts(connection) {
+            const result = connectStressScenePorts(model, connection);
+            model = result.model;
+            presentGraphMutation(revision, "connection created", {
+                selectedNodeId: null,
+                selectedNodeIds: [],
+                selectedEdgeId: result.edge.id
+            }).catch(reportMutationError);
+        },
+        onDeleteNode(nodeId) {
+            deleteNodes(revision, [nodeId]);
+        },
+        onDeleteNodes(nodeIds) {
+            deleteNodes(revision, nodeIds);
+        },
         onDeleteEdge(edgeId) {
-            removeConnection(revision, edgeId).catch((error) => {
-                rendererBackend = "unavailable";
-                status.textContent = error.message;
-                console.error(error);
-            });
+            deleteConnection(revision, edgeId);
+        },
+        onCopyNodes(nodeIds) {
+            copiedNodeIds = [...nodeIds];
+            status.textContent = `${number.format(nodeIds.length)} node${nodeIds.length === 1 ? "" : "s"} copied`;
+        },
+        onDuplicateNodes(nodeIds) {
+            duplicateNodes(revision, nodeIds);
+        },
+        onPasteNodes({ graphPoint }) {
+            pasteNodes(revision, graphPoint);
         }
     });
     return {
@@ -80,16 +111,82 @@ function renderStressModel(revision, viewState, selectedEdgeId = undefined) {
     };
 }
 
-async function removeConnection(revision, edgeId) {
+function clearSelection() {
+    return {
+        selectedNodeId: null,
+        selectedNodeIds: [],
+        selectedEdgeId: null
+    };
+}
+
+function deleteConnection(revision, edgeId) {
     if (revision !== loadRevision) return;
     const nextModel = removeStressSceneEdge(model, edgeId);
     if (nextModel === model) return;
     model = nextModel;
+    presentGraphMutation(revision, "connection removed", clearSelection())
+        .catch(reportMutationError);
+}
+
+function deleteNodes(revision, nodeIds) {
+    if (revision !== loadRevision) return;
+    const result = removeStressSceneNodes(model, positions, nodeIds);
+    if (result.model === model) return;
+    model = result.model;
+    positions = result.positions;
+    const label = nodeIds.length === 1
+        ? "node removed"
+        : `${number.format(nodeIds.length)} nodes removed`;
+    presentGraphMutation(revision, label, clearSelection())
+        .catch(reportMutationError);
+}
+
+function duplicateNodes(revision, nodeIds, offset = undefined) {
+    if (revision !== loadRevision || nodeIds.length === 0) return;
+    duplicationIndex += 1;
+    const result = duplicateStressSceneNodes(
+        model,
+        positions,
+        nodeIds,
+        duplicationIndex,
+        offset
+    );
+    if (result.model === model) return;
+    model = result.model;
+    positions = result.positions;
+    copiedNodeIds = [...nodeIds];
+    const label = result.nodeIds.length === 1
+        ? "node duplicated"
+        : `${number.format(result.nodeIds.length)} nodes duplicated`;
+    presentGraphMutation(revision, label, {
+        selectedNodeId: result.nodeIds.at(-1),
+        selectedNodeIds: result.nodeIds,
+        selectedEdgeId: null
+    }).catch(reportMutationError);
+}
+
+function pasteNodes(revision, graphPoint) {
+    const positionedIds = copiedNodeIds.filter((nodeId) => positions[nodeId]);
+    if (positionedIds.length === 0) return;
+    let minimumX = Infinity;
+    let minimumY = Infinity;
+    for (let index = 0; index < positionedIds.length; index += 1) {
+        const position = positions[positionedIds[index]];
+        minimumX = Math.min(minimumX, position.x);
+        minimumY = Math.min(minimumY, position.y);
+    }
+    duplicateNodes(revision, positionedIds, {
+        x: graphPoint.x - minimumX,
+        y: graphPoint.y - minimumY
+    });
+}
+
+async function presentGraphMutation(revision, label, selection) {
     const preparationStarted = performance.now();
     const preparation = renderStressModel(
         revision,
         editor.getView(),
-        null
+        selection
     );
     await preparation.presented;
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -103,7 +200,7 @@ async function removeConnection(revision, edgeId) {
     updateRendererMetrics();
     metrics.present.textContent = `${presentationTime.toFixed(1)} ms`;
     metrics.prepare.textContent = "loading…";
-    status.textContent = `${rendererBackend} · connection removed · completing updated graph in background`;
+    status.textContent = `${rendererBackend} · ${label} · completing updated graph in background`;
     await preparation.prepared;
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (
@@ -115,7 +212,7 @@ async function removeConnection(revision, edgeId) {
     const preparationTime = performance.now() - preparationStarted;
     updateRendererMetrics();
     metrics.prepare.textContent = `${preparationTime.toFixed(1)} ms`;
-    status.textContent = `${rendererBackend} · connection removed · updated ${number.format(model.edges.length)} connections in ${preparationTime.toFixed(1)} ms`;
+    status.textContent = `${rendererBackend} · ${label} · ${number.format(model.nodes.length)} nodes · ${number.format(model.edges.length)} connections · updated in ${preparationTime.toFixed(1)} ms`;
     sizeControl.disabled = false;
     rebuildButton.disabled = false;
 }
@@ -132,6 +229,7 @@ async function loadScene() {
     const generationTime = performance.now() - generationStarted;
     model = scene.model;
     positions = scene.positions;
+    copiedNodeIds = [];
     const preparationStarted = performance.now();
     const preparation = renderStressModel(
         revision,
