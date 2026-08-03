@@ -47,7 +47,7 @@ export function workerSafeGraphModel(model) {
     };
 }
 
-function prepareSynchronously({
+export function prepareGraphSynchronously({
     model,
     positions,
     layoutOptions,
@@ -85,7 +85,7 @@ export class GraphWorkerClient {
             model: workerSafeGraphModel(payload.model)
         };
         if (!this.worker) {
-            return Promise.resolve(prepareSynchronously(safePayload));
+            return Promise.resolve(prepareGraphSynchronously(safePayload));
         }
         const requestId = this.nextRequestId++;
         return new Promise((resolve, reject) => {

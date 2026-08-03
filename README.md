@@ -12,6 +12,7 @@ Corvus is open source and developed by [Raykast](https://raykast.com/).
 - One viewport-sized WebGPU canvas, even when graph coordinates are very large.
 - GPU-rendered cards, text, ports, connection ribbons, selection, and previews.
 - Stable viewport culling submits only visible shapes, glyphs, previews, and edges.
+- Viewport-first presentation for large positioned graphs while full preparation continues in the worker.
 - Deterministic layout and scene packing in a dedicated module worker.
 - Spatially indexed pointer hit testing and compact typed-array scene data.
 - Direct sampling of host-provided `GPUTexture` previews without readback.
@@ -44,9 +45,11 @@ Open the local URL printed by Vite. The complete host implementation is in
 
 Open `/stress.html` from the same development server to load a deterministic
 5,000-node graph with 5,930 connections and 142,320 potential edge segments.
-The page reports generation, preparation, and live visible-work counts while
-viewport culling submits only on-screen nodes, text, previews, and connections
-to the GPU. Controls can rebuild the scene with 1,000, 5,000, or 10,000 nodes.
+The page reports generation, first-presentation, complete-preparation, and live
+visible-work counts. Large scenes present a bounded initial viewport while the
+worker packs the complete graph; viewport culling then submits only on-screen
+nodes, text, previews, and connections to the GPU. Controls can rebuild the
+scene with 1,000, 5,000, or 10,000 nodes.
 
 The generator is isolated in [`demo/stress-scene.js`](demo/stress-scene.js), so
 the large graph is reproducible and does not inflate the normal example.
@@ -127,6 +130,11 @@ and callbacks for connection, movement, deletion, duplication, dropping,
 selection, and context actions. The example demonstrates a complete mutable
 host around those callbacks.
 
+After `update()`, await `editor.presented` when the first interactive scene must
+be visible. For large positioned graphs this is a bounded viewport scene. Await
+`editor.prepared` when work depends on the complete graph being packed and
+installed. Small graphs resolve both promises with the same complete scene.
+
 During a connection drag, Corvus searches the nearby spatial-index cells for
 the closest compatible port. The GPU preview snaps to that port and highlights
 it before the pointer reaches the socket. Set `portSnapRadius` when creating the
@@ -167,11 +175,14 @@ and can sample compatible preview textures directly.
 ## Rendering architecture
 
 The visible editor uses one WebGPU canvas. A module worker performs layout,
-scene packing, connection sampling, and spatial-index construction. Each
-invalidated frame builds stable compact lists from live viewport bounds, so
-off-screen shapes, glyphs, previews, and connections are not submitted. Curves
-crossing the viewport remain included even when both endpoint nodes are outside.
-Compute passes transform only visible shapes and tessellate only visible curves.
+scene packing, connection sampling, and spatial-index construction. Large
+positioned graphs synchronously pack only a bounded viewport slice for the first
+frame while complete preparation continues in that worker, then swap in the
+complete scene atomically. Each invalidated frame builds stable compact lists
+from live viewport bounds, so off-screen shapes, glyphs, previews, and
+connections are not submitted. Curves crossing the viewport remain included
+even when both endpoint nodes are outside. Compute passes transform only visible
+shapes and tessellate only visible curves.
 
 Glyphs come from a high-resolution ProFont signed-distance atlas uploaded to a
 GPU texture. ProFont and the generated atlas are MIT-licensed, with attribution

@@ -15,6 +15,7 @@ const metrics = {
     edges: document.querySelector('[data-metric="edges"]'),
     visibleEdges: document.querySelector('[data-metric="visible-edges"]'),
     segments: document.querySelector('[data-metric="segments"]'),
+    present: document.querySelector('[data-metric="present"]'),
     prepare: document.querySelector('[data-metric="prepare"]')
 };
 let positions = {};
@@ -72,13 +73,21 @@ async function loadScene() {
             positions = { ...nextPositions };
         }
     });
+    await editor.presented;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (revision !== loadRevision) return;
+    const presentationTime = performance.now() - preparationStarted;
+    updateRendererMetrics();
+    metrics.present.textContent = `${presentationTime.toFixed(1)} ms`;
+    metrics.prepare.textContent = "loading…";
+    status.textContent = `${rendererBackend} · graph presented · completing in background`;
     await editor.prepared;
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (revision !== loadRevision) return;
     const preparationTime = performance.now() - preparationStarted;
     updateRendererMetrics();
     metrics.prepare.textContent = `${preparationTime.toFixed(1)} ms`;
-    status.textContent = `${rendererBackend} · viewport culling active · generated in ${generationTime.toFixed(1)} ms`;
+    status.textContent = `${rendererBackend} · progressive loading and viewport culling active · generated in ${generationTime.toFixed(1)} ms`;
     sizeControl.disabled = false;
     rebuildButton.disabled = false;
 }

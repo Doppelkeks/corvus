@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     GraphWorkerClient,
+    prepareGraphSynchronously,
     workerSafeGraphModel
 } from "./graph-worker-client.js";
 
@@ -30,6 +31,17 @@ describe("GraphWorkerClient", () => {
         expect(result.layout.nodes).toHaveLength(1);
         expect(result.scene.nodeRecords).toHaveLength(4);
         client.destroy();
+    });
+
+    it("can pack a bounded progressive scene synchronously", () => {
+        const result = prepareGraphSynchronously({
+            model: MODEL,
+            positions: { source: { x: 12, y: 18 } },
+            layoutOptions: {},
+            sceneOptions: {}
+        });
+        expect(result.layout.nodes[0]).toMatchObject({ x: 12, y: 18 });
+        expect(result.scene.nodeRecords).toHaveLength(4);
     });
 
     it("strips host-only values before crossing the worker boundary", () => {

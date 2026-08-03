@@ -33,7 +33,7 @@
 
 .stress-metrics {
     display: grid;
-    grid-template-columns: repeat(6, minmax(6.5rem, 1fr));
+    grid-template-columns: repeat(7, minmax(6.2rem, 1fr));
     margin: 0;
     gap: 1px;
     overflow: hidden;

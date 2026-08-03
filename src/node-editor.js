@@ -4,7 +4,10 @@ import {
     screenToGraphPoint,
     zoomGraphViewFromWheel
 } from "./graph-camera.js";
-import { GraphWorkerClient } from "./graph-worker-client.js";
+import {
+    GraphWorkerClient,
+    prepareGraphSynchronously
+} from "./graph-worker-client.js";
 import {
     GRAPH_ANNOTATION_GEOMETRY,
     GRAPH_ANNOTATION_KINDS,
@@ -20,6 +23,7 @@ import {
 } from "./node-drag-payload.js";
 import { NODE_CARD_GEOMETRY } from "./node-card-geometry.js";
 import { nodeEditorCommandForKey } from "./node-editor-command.js";
+import { createProgressiveGraphSlice } from "./progressive-scene.js";
 import {
     closestCompatiblePort,
     connectionForPorts
@@ -98,6 +102,7 @@ export class NodeEditor {
         this.positions = new Map();
         this.layout = null;
         this.scene = null;
+        this.presentation = "empty";
         this.previewStates = new Map();
         this.annotations = Object.freeze([]);
         this.selectedNodeId = null;
@@ -149,6 +154,8 @@ export class NodeEditor {
             throw error;
         });
         this.ready.catch(() => {});
+        this.prepared = Promise.resolve(null);
+        this.presented = this.prepared;
         this.#bindEvents();
     }
 
@@ -286,13 +293,13 @@ export class NodeEditor {
         }
         this.surface.setView(this.view);
         this.#syncInteraction();
-        this.prepared = this.#prepareScene();
+        this.prepared = this.#prepareScene({ progressive: true });
         return this.stats();
     }
 
-    async #prepareScene({ notifyPositions = false } = {}) {
+    #prepareScene({ notifyPositions = false, progressive = false } = {}) {
         const revision = ++this.prepareRevision;
-        const result = await this.worker.prepare({
+        const payload = {
             model: this.model,
             positions: positionObject(this.positions),
             layoutOptions: this.layoutOptions,
@@ -300,29 +307,104 @@ export class NodeEditor {
                 ...this.layoutOptions,
                 annotations: this.annotations
             }
+        };
+        const progressiveView = Object.freeze({ ...this.view });
+        const progressiveWidth = this.canvas.clientWidth;
+        const progressiveHeight = this.canvas.clientHeight;
+        let resolvePresented;
+        let rejectPresented;
+        let presentationSettled = false;
+        let completeInstalled = false;
+        this.presented = new Promise((resolve, reject) => {
+            resolvePresented = resolve;
+            rejectPresented = reject;
         });
-        await this.ready;
-        if (revision !== this.prepareRevision || this.destroyed) return null;
+        const settlePresented = (result, error = null) => {
+            if (presentationSettled) return;
+            presentationSettled = true;
+            if (error) rejectPresented(error);
+            else resolvePresented(result);
+        };
+        const completePreparation = this.worker.prepare(payload);
+        this.presentation = "loading";
+
+        if (progressive) {
+            Promise.resolve().then(async () => {
+                const slice = createProgressiveGraphSlice(
+                    payload.model,
+                    payload.positions,
+                    progressiveView,
+                    {
+                        width: progressiveWidth,
+                        height: progressiveHeight,
+                        layoutOptions: this.layoutOptions
+                    }
+                );
+                if (!slice) return;
+                const result = prepareGraphSynchronously({
+                    model: slice.model,
+                    positions: slice.positions,
+                    layoutOptions: this.layoutOptions,
+                    sceneOptions: {
+                        ...this.layoutOptions,
+                        annotations: []
+                    }
+                });
+                await this.ready;
+                if (
+                    revision !== this.prepareRevision
+                    || this.destroyed
+                    || completeInstalled
+                ) {
+                    return;
+                }
+                this.#installPreparedScene(result, { provisional: true });
+                settlePresented(result);
+            }).catch(() => {
+                // Complete worker preparation remains the safe fallback.
+            });
+        }
+
+        return completePreparation.then(async (result) => {
+            await this.ready;
+            if (revision !== this.prepareRevision || this.destroyed) {
+                settlePresented(null);
+                return null;
+            }
+            completeInstalled = true;
+            this.#installPreparedScene(result);
+            settlePresented(result);
+            if (notifyPositions) {
+                this.callbacks.onPositionsChange?.(this.getPositions());
+            }
+            return result;
+        }).catch((error) => {
+            settlePresented(null, error);
+            throw error;
+        });
+    }
+
+    #installPreparedScene(result, { provisional = false } = {}) {
         this.layout = result.layout;
         this.scene = result.scene;
-        result.layout.nodes.forEach((entry) => {
-            if (!this.positions.has(entry.nodeId)) {
-                this.positions.set(entry.nodeId, {
-                    x: entry.x,
-                    y: entry.y
-                });
-            }
-        });
+        if (!provisional) {
+            result.layout.nodes.forEach((entry) => {
+                if (!this.positions.has(entry.nodeId)) {
+                    this.positions.set(entry.nodeId, {
+                        x: entry.x,
+                        y: entry.y
+                    });
+                }
+            });
+        }
         this.surface.setScene(result.scene);
         this.surface.setView(this.view);
         this.surface.setPreviewTextures(this.previewStates);
-        this.selectionStatus.textContent =
-            `${this.model.nodes.length} nodes · ${this.model.edges.length} connections · ${this.annotations.length} notes · accelerated rendering`;
+        this.presentation = provisional ? "progressive" : "complete";
+        this.selectionStatus.textContent = provisional
+            ? `${result.layout.nodes.length} nearby nodes visible · loading ${this.model.nodes.length} nodes in background`
+            : `${this.model.nodes.length} nodes · ${this.model.edges.length} connections · ${this.annotations.length} notes · accelerated rendering`;
         this.#syncInteraction();
-        if (notifyPositions) {
-            this.callbacks.onPositionsChange?.(this.getPositions());
-        }
-        return result;
     }
 
     #graphPoint(event) {
@@ -1351,7 +1433,8 @@ export class NodeEditor {
             nodeCount: this.model?.nodes.length ?? 0,
             edgeCount: this.model?.edges.length ?? 0,
             ...this.surface.stats(),
-            zoom: this.view.zoom
+            zoom: this.view.zoom,
+            presentation: this.presentation
         });
     }
 
