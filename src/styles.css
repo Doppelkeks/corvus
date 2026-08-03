@@ -1,10 +1,15 @@
+@import "@echo/ui-system/tokens.css";
+
+/* Graph canvas and workspace theme --------------------------------------- */
+
 .node-editor {
-    --node-editor-bg: #090a09;
-    --node-editor-panel: #111311f5;
-    --node-editor-line: #343832;
-    --node-editor-text: #d0d2cb;
-    --node-editor-muted: #7c8178;
-    --node-editor-accent: var(--accent, #87d61f);
+    --node-editor-bg: var(--color-bg);
+    --node-editor-panel: color-mix(in srgb, var(--color-surface) 96%, transparent);
+    --node-editor-line: var(--color-border-strong);
+    --node-editor-text: var(--color-text);
+    --node-editor-muted: var(--color-muted);
+    --node-editor-accent: var(--color-accent);
+    --node-editor-drop-layer-z: calc(var(--z-modal) + 1);
     position: relative;
     min-width: 0;
     min-height: 0;
@@ -17,14 +22,14 @@
 }
 
 .node-workspace-dock {
-    z-index: 8;
+    z-index: var(--z-raised);
     display: grid;
     min-width: 0;
     min-height: 0;
-    grid-template-rows: 34px minmax(0, 1fr);
+    grid-template-rows: var(--workspace-toolbar-height) minmax(0, 1fr);
     overflow: hidden;
-    border-color: var(--node-editor-line, rgba(255, 255, 255, .1));
-    background: var(--node-editor-panel, #111311);
+    border-color: var(--node-editor-line);
+    background: var(--node-editor-panel);
 }
 
 .node-workspace-dock[hidden] {
@@ -37,7 +42,7 @@
     grid-auto-flow: column;
     min-width: 0;
     overflow-x: auto;
-    border-bottom: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
+    border-block-end: 1px solid var(--node-editor-line);
     scrollbar-width: none;
 }
 
@@ -48,30 +53,32 @@
 .node-dock-tab {
     min-width: 0;
     border: 0;
-    border-right: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
-    border-bottom: 2px solid transparent;
+    border-inline-end: 1px solid var(--node-editor-line);
+    border-block-end: 2px solid transparent;
     background: transparent;
-    color: var(--node-editor-muted, #7c8178);
-    padding: 0 14px;
-    font: 700 9px/1 "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: .06em;
+    color: var(--node-editor-muted);
+    padding: 0 var(--space-3);
+    font: var(--font-weight-bold) var(--font-size-ui-md) / var(--line-height-ui)
+        var(--font-family-sans);
+    letter-spacing: var(--letter-spacing-ui);
     text-transform: uppercase;
     cursor: grab;
-    touch-action: none;
+    touch-action: pan-x;
 }
 
 .node-dock-tab:last-child {
-    border-right: 0;
+    border-inline-end: 0;
 }
 
 .node-dock-tab[aria-selected="true"] {
-    border-bottom-color: var(--node-editor-accent, #87d61f);
-    color: var(--node-editor-text, #d0d2cb);
-    background: rgba(255, 255, 255, .025);
+    border-block-end-color: var(--node-editor-accent);
+    color: var(--node-editor-text);
+    background: var(--color-surface-hover);
 }
 
 .node-dock-tab.dragging {
     cursor: grabbing;
+    touch-action: none;
 }
 
 .node-dock-content {
@@ -81,7 +88,8 @@
     overflow: hidden;
 }
 
-.node-workspace-panel-docked {
+/* The dock controller writes panel bounds inline; dock state must override that geometry. */
+.node-workspace-panel.node-workspace-panel-docked {
     position: relative !important;
     inset: auto !important;
     width: 100% !important;
@@ -90,22 +98,24 @@
     box-shadow: none !important;
 }
 
-.node-workspace-panel-floating {
+.node-workspace-panel.node-workspace-panel-floating {
     position: absolute !important;
-    border: 1px solid var(--node-editor-line, rgba(255, 255, 255, .1));
-    box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+    border: 1px solid var(--node-editor-line);
+    box-shadow: var(--shadow-lg);
 }
 
 .node-workspace-panel-docked .node-workspace-resize-handle {
     display: none;
 }
 
+/* Docking feedback ------------------------------------------------------- */
+
 .node-dock-drop-layer {
     position: absolute;
-    z-index: 1000;
+    z-index: var(--node-editor-drop-layer-z);
     inset: 0;
     overflow: hidden;
-    background: rgba(4, 5, 5, .48);
+    background: color-mix(in srgb, var(--color-bg) 48%, transparent);
     pointer-events: none;
 }
 
@@ -121,65 +131,55 @@
     min-height: 74px;
     place-content: center;
     justify-items: center;
-    gap: 8px;
-    border: 1px solid rgba(255, 255, 255, .16);
-    border-radius: 7px;
-    background: rgba(18, 20, 18, .88);
-    color: var(--node-editor-muted, #7c8178);
-    box-shadow: 0 14px 42px rgba(0, 0, 0, .32);
-    font: 650 9px/1 "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: .035em;
+    gap: var(--space-2);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
+    color: var(--node-editor-muted);
+    box-shadow: var(--shadow-md);
+    font: var(--font-weight-semibold) var(--font-size-ui-md) / var(--line-height-ui)
+        var(--font-family-sans);
+    letter-spacing: var(--letter-spacing-ui);
     transition:
-        border-color .12s,
-        background .12s,
-        color .12s,
-        transform .12s;
+        border-color var(--duration-fast) var(--ease-standard),
+        background var(--duration-fast) var(--ease-standard),
+        color var(--duration-fast) var(--ease-standard),
+        transform var(--duration-fast) var(--ease-standard);
 }
 
 .node-dock-drop-zone-left {
-    top: 9%;
-    bottom: 30%;
-    left: 14px;
+    inset-block: 9% 30%;
+    inset-inline-start: var(--space-3);
     width: clamp(96px, 15%, 180px);
 }
 
 .node-dock-drop-zone-right {
-    top: 9%;
-    right: 14px;
-    bottom: 30%;
+    inset-block: 9% 30%;
+    inset-inline-end: var(--space-3);
     width: clamp(96px, 15%, 180px);
 }
 
 .node-dock-drop-zone-bottom {
-    right: 22%;
-    bottom: 14px;
-    left: 22%;
+    inset-inline: 22%;
+    inset-block-end: var(--space-3);
     height: clamp(92px, 20%, 160px);
 }
 
 .node-dock-drop-zone-float {
-    top: 50%;
-    left: 50%;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
     width: clamp(150px, 22%, 260px);
     height: clamp(104px, 20%, 170px);
     transform: translate(-50%, -50%);
 }
 
 .node-dock-drop-zone.active {
-    border-color: var(--node-editor-accent, #87d61f);
-    background: color-mix(
-        in srgb,
-        var(--node-editor-accent, #87d61f) 16%,
-        #111411
-    );
-    color: var(--node-editor-text, #d0d2cb);
+    border-color: var(--node-editor-accent);
+    background: color-mix(in srgb, var(--node-editor-accent) 16%, var(--color-surface-raised));
+    color: var(--node-editor-text);
     box-shadow:
-        0 0 0 2px color-mix(
-            in srgb,
-            var(--node-editor-accent, #87d61f) 16%,
-            transparent
-        ),
-        0 22px 55px rgba(0, 0, 0, .5);
+        0 0 0 2px color-mix(in srgb, var(--node-editor-accent) 16%, transparent),
+        var(--shadow-md);
 }
 
 .node-dock-drop-zone-float.active {
@@ -193,7 +193,7 @@
     height: 28px;
     border: 1px solid currentColor;
     border-radius: 3px;
-    opacity: .8;
+    opacity: 0.8;
 }
 
 .node-dock-drop-zone-icon::after {
@@ -229,36 +229,28 @@
     z-index: 1;
     display: grid;
     align-content: start;
-    gap: 5px;
+    gap: var(--space-1);
     overflow: hidden;
-    border: 1px solid color-mix(
-        in srgb,
-        var(--node-editor-accent, #87d61f) 64%,
-        transparent
+    border: 1px solid color-mix(in srgb, var(--node-editor-accent) 64%, transparent);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(
+        color-mix(in srgb, var(--node-editor-accent) 8%, transparent) 34px,
+        color-mix(in srgb, var(--color-overlay) 70%, transparent) 34px
     );
-    border-radius: 7px;
-    background:
-        linear-gradient(
-            color-mix(
-                in srgb,
-                var(--node-editor-accent, #87d61f) 8%,
-                transparent
-            ) 34px,
-            rgba(12, 14, 12, .7) 34px
-        );
-    color: var(--node-editor-text, #d0d2cb);
-    padding: 11px 12px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, .48);
-    opacity: .72;
+    color: var(--node-editor-text);
+    padding: var(--space-3);
+    box-shadow: var(--shadow-lg);
+    opacity: 0.72;
 }
 
 .node-dock-drag-ghost strong {
-    font: 700 9px/1 "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    font: var(--font-weight-bold) var(--font-size-ui-md) / var(--line-height-ui)
+        var(--font-family-sans);
 }
 
 .node-dock-drag-ghost span {
-    color: var(--node-editor-muted, #7c8178);
-    font: 8px/1.2 "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    color: var(--node-editor-muted);
+    font: var(--font-size-ui-sm) / var(--line-height-ui) var(--font-family-sans);
 }
 
 .node-dock-dragging,
@@ -267,15 +259,21 @@
 }
 
 .node-workspace-panel.dock-drag-source {
-    opacity: .38;
+    opacity: 0.38;
 }
+
+/* Interactive GPU viewport ---------------------------------------------- */
 
 .node-editor-viewport {
     position: absolute;
     inset: 0;
     overflow: hidden;
-    outline: none;
     touch-action: none;
+}
+
+.node-editor-viewport:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: calc(var(--focus-ring-width) * -1);
 }
 
 .node-editor-viewport.panning {
@@ -315,7 +313,7 @@
     cursor: pointer;
 }
 
-.node-editor-viewport.node-header-hovered {
+.node-editor-viewport.node-drag-hovered {
     cursor: grab;
 }
 
@@ -352,26 +350,27 @@
 
 .node-editor.gpu-unavailable::after {
     position: absolute;
-    z-index: 8;
+    z-index: var(--z-menu);
     inset: 0;
     display: grid;
     place-items: center;
-    padding: 32px;
-    background: #090a09ef;
-    color: #f08d83;
+    padding: var(--space-6);
+    background: var(--color-overlay);
+    color: var(--color-danger);
     content: "Graphics acceleration is required for the graph renderer.";
-    font-size: 11px;
+    font-size: var(--font-size-ui-lg);
     text-align: center;
 }
 
+/* Panel positioning and visibility are controller contracts, so they win component CSS. */
 .node-workspace-panel {
     position: absolute !important;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    border: 1px solid var(--line, #292d28);
-    border-radius: 8px;
-    box-shadow: 0 16px 45px #0009;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
 }
 
 .node-workspace-panel[hidden] {
@@ -382,26 +381,39 @@
     user-select: none;
 }
 
-[data-panel-drag-handle] {
+.node-workspace-panel [data-panel-drag-handle] {
     cursor: grab;
     touch-action: none;
 }
 
 .node-workspace-resize-handle {
     position: absolute;
-    z-index: 20;
-    right: 0;
-    bottom: 0;
+    z-index: var(--z-sticky);
+    inset-inline-end: 0;
+    inset-block-end: 0;
     width: 17px;
     height: 17px;
     border: 0;
-    background:
-        linear-gradient(135deg, transparent 0 50%, #89948f 50% 56%, transparent 56% 68%, #89948f 68% 74%, transparent 74%);
+    background: linear-gradient(
+        135deg,
+        transparent 0 50%,
+        var(--color-muted) 50% 56%,
+        transparent 56% 68%,
+        var(--color-muted) 68% 74%,
+        transparent 74%
+    );
     cursor: nwse-resize;
-    opacity: .55;
+    opacity: 0.55;
     touch-action: none;
 }
 
 .node-workspace-resize-handle:hover {
     opacity: 1;
+}
+
+@media (pointer: coarse) {
+    .node-workspace-resize-handle {
+        width: var(--control-height);
+        height: var(--control-height);
+    }
 }

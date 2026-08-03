@@ -9,8 +9,8 @@ export const DEFAULT_GRAPH_VIEW = Object.freeze({
     scrollTop: 0
 });
 
-const GRAPH_WHEEL_ZOOM_SENSITIVITY = 0.001;
-const MAXIMUM_WHEEL_DELTA = 240;
+const GRAPH_WHEEL_ZOOM_SENSITIVITY = 0.00045;
+const MAXIMUM_WHEEL_DELTA = 160;
 
 function finiteNumber(value, fallback) {
     const number = Number(value);

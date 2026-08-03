@@ -18,6 +18,12 @@ describe("node editor theme", () => {
     });
 
     it("uses the shared GenArt accent only as a hostless fallback", () => {
+        expect(nodeEditorAccentChannels("var(--color-accent)")).toEqual([
+            0x87 / 255,
+            0xd6 / 255,
+            0x1f / 255,
+            1
+        ]);
         expect(nodeEditorAccentChannels("var(--accent)")).toEqual([
             0x87 / 255,
             0xd6 / 255,

@@ -3,9 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 function source(name) {
-    return readFileSync(fileURLToPath(
-        new URL(name, import.meta.url)
-    ), "utf8");
+    return readFileSync(fileURLToPath(new URL(name, import.meta.url)), "utf8");
 }
 
 describe("GPU-only graph surface architecture", () => {
@@ -35,9 +33,7 @@ describe("GPU-only graph surface architecture", () => {
         expect(surface).toContain("edge tessellation");
         expect(surface).toContain("shape transform and cull");
         expect(surface).toContain("underlayShapeCount");
-        expect(surface).toContain(
-            "pass.draw(6, overlayShapeCount, 0, underlayShapeCount)"
-        );
+        expect(surface).toContain("pass.draw(6, overlayShapeCount, 0, underlayShapeCount)");
         expect(worker).toContain("buildGraphScene");
         expect(worker).toContain("transferableScene");
     });
@@ -62,6 +58,18 @@ describe("GPU-only graph surface architecture", () => {
         expect(shaders).not.toContain("0.529, 0.839, 0.122");
     });
 
+    it("uses the complete node card, including its preview, as the move surface", () => {
+        const editor = source("./node-editor.js");
+        const styles = source("./styles.css");
+
+        expect(editor).not.toContain("point.y - node.y <= node.headerHeight");
+        expect(editor).toContain('"node-drag-hovered"');
+        expect(styles).toContain(".node-editor-viewport.node-drag-hovered");
+        expect(editor.indexOf("const portHit = this.#portAt(point)")).toBeLessThan(
+            editor.indexOf("const node = this.#nodeAt(point)"),
+        );
+    });
+
     it("uses antialiased GPU text and renders a quiet line grid", () => {
         const fontAtlas = source("./gpu-font-atlas.js");
         const strokeFont = source("./stroke-font.js");
@@ -75,9 +83,7 @@ describe("GPU-only graph surface architecture", () => {
         expect(shaders).toContain("round(unsnappedScreen * pixelRatio)");
         expect(shaders).toContain("fwidth(sample.a)");
         expect(shaders).toContain("minorCoordinate");
-        expect(shaders).not.toContain(
-            "length(fract(graph / minorCell)"
-        );
+        expect(shaders).not.toContain("length(fract(graph / minorCell)");
         expect(styles).not.toContain("radial-gradient");
         expect(styles).toContain(".node-workspace-panel[hidden]");
         expect(styles).toContain("display: none !important");
@@ -85,18 +91,20 @@ describe("GPU-only graph surface architecture", () => {
 
     it("distributes dock tabs across the complete dock rail", () => {
         const styles = source("./styles.css");
-        expect(styles).toContain(
-            "grid-auto-columns: minmax(max-content, 1fr);"
-        );
+        expect(styles).toContain("grid-auto-columns: minmax(max-content, 1fr);");
         expect(styles).toContain("grid-auto-flow: column;");
         expect(styles).toContain(".node-dock-tab:last-child");
+        expect(styles).toMatch(/\.node-dock-tab\s*\{[^}]*touch-action:\s*pan-x;/s);
+        expect(styles).toContain(".node-editor-viewport:focus-visible");
+        expect(styles).toContain("outline: var(--focus-ring)");
+        expect(styles).toMatch(
+            /\.node-workspace-panel\.node-workspace-panel-docked\s*\{[^}]*position:\s*relative !important;/s,
+        );
     });
 
     it("uses an unmodified wheel as the graph zoom gesture", () => {
         const editor = source("./node-editor.js");
         expect(editor).toContain("zoomGraphViewFromWheel");
-        expect(editor).not.toContain(
-            "if (event.ctrlKey || event.metaKey)"
-        );
+        expect(editor).not.toContain("if (event.ctrlKey || event.metaKey)");
     });
 });

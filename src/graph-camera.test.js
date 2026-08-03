@@ -78,6 +78,8 @@ describe("unbounded graph camera", () => {
 
         expect(zoomedIn.zoom).toBeGreaterThan(view.zoom);
         expect(zoomedOut.zoom).toBeLessThan(view.zoom);
+        expect(zoomedIn.zoom / view.zoom).toBeLessThan(1.06);
+        expect(zoomedOut.zoom / view.zoom).toBeGreaterThan(0.94);
         expect(screenToGraphPoint(zoomedIn, anchor).x)
             .toBeCloseTo(graphPoint.x);
         expect(screenToGraphPoint(zoomedIn, anchor).y)

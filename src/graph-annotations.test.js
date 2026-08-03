@@ -54,6 +54,7 @@ describe("graph annotations", () => {
             width: 400,
             height: 300
         });
+        expect(section.color).toBe("#6f7c8e");
         const contained = nodesContainedByCommentSection(section, [{
             id: "inside",
             x: 130,

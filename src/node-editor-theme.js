@@ -39,6 +39,8 @@ export function resolveNodeEditorAccent(element, explicitValue = null) {
     }
     const style = getComputedStyle(element);
     return parsedChannels(style.getPropertyValue("--node-editor-accent"))
+        ?? parsedChannels(style.getPropertyValue("--color-accent"))
+        // Preserve the retired alias only as an external-consumer fallback.
         ?? parsedChannels(style.getPropertyValue("--accent"))
         ?? [...DEFAULT_ACCENT];
 }

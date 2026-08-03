@@ -5,7 +5,11 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
+    "./dock-layout": "./src/dock-layout.js",
     "./styles.css": "./src/styles.css"
+  },
+  "dependencies": {
+    "@echo/ui-system": "workspace:*"
   },
   "description": "Use-case-agnostic, WebGPU-accelerated node editor framework.",
   "sideEffects": [

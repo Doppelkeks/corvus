@@ -22,7 +22,8 @@ export const GRAPH_ANNOTATION_GEOMETRY = Object.freeze({
 
 const DEFAULT_COLORS = Object.freeze({
     comment: "#e1b643",
-    section: "#87d61f"
+    // Portable graph data needs a stable neutral fallback; product accents are supplied by hosts.
+    section: "#6f7c8e"
 });
 
 function finite(value, fallback) {

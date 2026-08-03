@@ -596,29 +596,27 @@ export class NodeEditor {
             } else {
                 this.selectNode(node.id);
             }
-            if (point.y - node.y <= node.headerHeight) {
-                if (!this.selectedNodeIds.has(node.id)) return;
-                const startingPositions = {};
-                this.selectedNodeIds.forEach((nodeId) => {
-                    const index = this.scene.nodeIndexById[nodeId];
-                    if (!Number.isInteger(index)) return;
-                    const liveNode = this.#liveNode(index);
-                    startingPositions[nodeId] = {
-                        x: liveNode.x,
-                        y: liveNode.y
-                    };
-                });
-                this.drag = {
-                    kind: "node",
-                    pointerId,
-                    nodeId: node.id,
-                    clientX: event.clientX,
-                    clientY: event.clientY,
-                    startingPositions
+            if (!this.selectedNodeIds.has(node.id)) return;
+            const startingPositions = {};
+            this.selectedNodeIds.forEach((nodeId) => {
+                const index = this.scene.nodeIndexById[nodeId];
+                if (!Number.isInteger(index)) return;
+                const liveNode = this.#liveNode(index);
+                startingPositions[nodeId] = {
+                    x: liveNode.x,
+                    y: liveNode.y
                 };
-                this.viewport.classList.add("dragging-node");
-                this.viewport.setPointerCapture(pointerId);
-            }
+            });
+            this.drag = {
+                kind: "node",
+                pointerId,
+                nodeId: node.id,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                startingPositions
+            };
+            this.viewport.classList.add("dragging-node");
+            this.viewport.setPointerCapture(pointerId);
             return;
         }
         const annotationHit = this.#annotationAt(point);
@@ -818,8 +816,8 @@ export class NodeEditor {
         const annotation = node ? null : this.#annotationAt(point);
         this.viewport.classList.toggle("port-hovered", Boolean(port));
         this.viewport.classList.toggle(
-            "node-header-hovered",
-            Boolean(node && point.y - node.y <= node.headerHeight)
+            "node-drag-hovered",
+            Boolean(node)
         );
         this.viewport.classList.toggle(
             "annotation-hovered",
