@@ -75,3 +75,16 @@ export function createStressScene(requestedCount = 5000) {
         columnCount
     };
 }
+
+/** Returns a new stress model without the requested connection. */
+export function removeStressSceneEdge(model, edgeId) {
+    const edgeIndex = model.edges.findIndex((edge) => edge.id === edgeId);
+    if (edgeIndex < 0) return model;
+    return {
+        ...model,
+        edges: [
+            ...model.edges.slice(0, edgeIndex),
+            ...model.edges.slice(edgeIndex + 1)
+        ]
+    };
+}

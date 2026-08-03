@@ -2,7 +2,10 @@ import { createNodeEditor } from "../src/index.js";
 import "../src/styles.css";
 import "./styles.css";
 import "./stress.css";
-import { createStressScene } from "./stress-scene.js";
+import {
+    createStressScene,
+    removeStressSceneEdge
+} from "./stress-scene.js";
 
 const number = new Intl.NumberFormat("en-US");
 const container = document.querySelector("#editor");
@@ -19,6 +22,7 @@ const metrics = {
     prepare: document.querySelector('[data-metric="prepare"]')
 };
 let positions = {};
+let model = null;
 let rendererBackend = "starting";
 let loadRevision = 0;
 let metricFrame = 0;
@@ -51,6 +55,71 @@ const editor = createNodeEditor(container, {
     }
 });
 
+function renderStressModel(revision, viewState, selectedEdgeId = undefined) {
+    editor.update(model, {
+        positions,
+        viewState,
+        selectedEdgeId,
+        onViewChange() {
+            scheduleRendererMetrics();
+        },
+        onPositionsChange(nextPositions) {
+            positions = { ...nextPositions };
+        },
+        onDeleteEdge(edgeId) {
+            removeConnection(revision, edgeId).catch((error) => {
+                rendererBackend = "unavailable";
+                status.textContent = error.message;
+                console.error(error);
+            });
+        }
+    });
+    return {
+        presented: editor.presented,
+        prepared: editor.prepared
+    };
+}
+
+async function removeConnection(revision, edgeId) {
+    if (revision !== loadRevision) return;
+    const nextModel = removeStressSceneEdge(model, edgeId);
+    if (nextModel === model) return;
+    model = nextModel;
+    const preparationStarted = performance.now();
+    const preparation = renderStressModel(
+        revision,
+        editor.getView(),
+        null
+    );
+    await preparation.presented;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (
+        revision !== loadRevision
+        || editor.presented !== preparation.presented
+    ) {
+        return;
+    }
+    const presentationTime = performance.now() - preparationStarted;
+    updateRendererMetrics();
+    metrics.present.textContent = `${presentationTime.toFixed(1)} ms`;
+    metrics.prepare.textContent = "loading…";
+    status.textContent = `${rendererBackend} · connection removed · completing updated graph in background`;
+    await preparation.prepared;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (
+        revision !== loadRevision
+        || editor.prepared !== preparation.prepared
+    ) {
+        return;
+    }
+    const preparationTime = performance.now() - preparationStarted;
+    updateRendererMetrics();
+    metrics.prepare.textContent = `${preparationTime.toFixed(1)} ms`;
+    status.textContent = `${rendererBackend} · connection removed · updated ${number.format(model.edges.length)} connections in ${preparationTime.toFixed(1)} ms`;
+    sizeControl.disabled = false;
+    rebuildButton.disabled = false;
+}
+
 async function loadScene() {
     const revision = ++loadRevision;
     const count = Number(sizeControl.value);
@@ -61,29 +130,34 @@ async function loadScene() {
     const generationStarted = performance.now();
     const scene = createStressScene(count);
     const generationTime = performance.now() - generationStarted;
+    model = scene.model;
     positions = scene.positions;
     const preparationStarted = performance.now();
-    editor.update(scene.model, {
-        positions,
-        viewState: { zoom: 0.5, scrollLeft: 0, scrollTop: 0 },
-        onViewChange() {
-            scheduleRendererMetrics();
-        },
-        onPositionsChange(nextPositions) {
-            positions = { ...nextPositions };
-        }
-    });
-    await editor.presented;
+    const preparation = renderStressModel(
+        revision,
+        { zoom: 0.5, scrollLeft: 0, scrollTop: 0 }
+    );
+    await preparation.presented;
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    if (revision !== loadRevision) return;
+    if (
+        revision !== loadRevision
+        || editor.presented !== preparation.presented
+    ) {
+        return;
+    }
     const presentationTime = performance.now() - preparationStarted;
     updateRendererMetrics();
     metrics.present.textContent = `${presentationTime.toFixed(1)} ms`;
     metrics.prepare.textContent = "loading…";
     status.textContent = `${rendererBackend} · graph presented · completing in background`;
-    await editor.prepared;
+    await preparation.prepared;
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    if (revision !== loadRevision) return;
+    if (
+        revision !== loadRevision
+        || editor.prepared !== preparation.prepared
+    ) {
+        return;
+    }
     const preparationTime = performance.now() - preparationStarted;
     updateRendererMetrics();
     metrics.prepare.textContent = `${preparationTime.toFixed(1)} ms`;
