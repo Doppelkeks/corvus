@@ -17,17 +17,17 @@ describe("node editor theme", () => {
         ]);
     });
 
-    it("uses the shared GenArt accent only as a hostless fallback", () => {
+    it("uses the standalone renderer accent as its hostless fallback", () => {
         expect(nodeEditorAccentChannels("var(--color-accent)")).toEqual([
-            0x87 / 255,
-            0xd6 / 255,
-            0x1f / 255,
+            0x7d / 255,
+            0xd3 / 255,
+            0xfc / 255,
             1
         ]);
         expect(nodeEditorAccentChannels("var(--accent)")).toEqual([
-            0x87 / 255,
-            0xd6 / 255,
-            0x1f / 255,
+            0x7d / 255,
+            0xd3 / 255,
+            0xfc / 255,
             1
         ]);
     });

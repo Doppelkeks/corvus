@@ -11,8 +11,8 @@ describe("GPU font atlas", () => {
         expect(createGpuFontAtlasData()).toBe(atlas);
         expect(GPU_FONT_ATLAS_METRICS.glyphScale).toBeGreaterThanOrEqual(8);
         expect(GPU_FONT_ATLAS_METRICS.distanceRange).toBeGreaterThanOrEqual(8);
-        expect(GPU_FONT_ATLAS_METRICS.family).toContain("Segoe UI");
-        expect(GPU_FONT_ATLAS_METRICS.weight).toBe(600);
+        expect(GPU_FONT_ATLAS_METRICS.family).toContain("ProFont");
+        expect(GPU_FONT_ATLAS_METRICS.weight).toBe(400);
         expect(atlas.width).toBe(
             GPU_FONT_ATLAS_METRICS.columns
             * GPU_FONT_ATLAS_METRICS.cellWidth

@@ -1,18 +1,47 @@
 {
-  "name": "@echo/node-editor",
-  "version": "0.1.0",
-  "type": "module",
-  "main": "src/index.js",
-  "exports": {
-    ".": "./src/index.js",
-    "./dock-layout": "./src/dock-layout.js",
-    "./styles.css": "./src/styles.css"
-  },
-  "dependencies": {
-    "@echo/ui-system": "workspace:*"
-  },
-  "description": "Use-case-agnostic, WebGPU-accelerated node editor framework.",
-  "sideEffects": [
-    "./src/styles.css"
-  ]
+    "name": "@raykast/webgpu-node-editor",
+    "version": "0.1.0",
+    "description": "Use-case-agnostic, WebGPU-accelerated node editor framework.",
+    "packageManager": "pnpm@11.9.0",
+    "type": "module",
+    "main": "./src/index.js",
+    "exports": {
+        ".": "./src/index.js",
+        "./dock-layout": "./src/dock-layout.js",
+        "./styles.css": "./src/styles.css",
+        "./theme.css": "./src/theme.css"
+    },
+    "files": [
+        "src",
+        "!src/**/*.test.js",
+        "README.md",
+        "LICENSE",
+        "THIRD_PARTY_NOTICES.md"
+    ],
+    "sideEffects": [
+        "./src/styles.css",
+        "./src/theme.css"
+    ],
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "test": "vitest run",
+        "check": "pnpm test && pnpm build",
+        "font:generate": "python scripts/generate-font-atlas.py"
+    },
+    "keywords": [
+        "webgpu",
+        "node-editor",
+        "graph-editor",
+        "gpu",
+        "canvas"
+    ],
+    "license": "MIT",
+    "engines": {
+        "node": ">=20"
+    },
+    "devDependencies": {
+        "vite": "^7.3.6",
+        "vitest": "^3.2.7"
+    }
 }

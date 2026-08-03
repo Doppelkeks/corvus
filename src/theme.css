@@ -1,0 +1,62 @@
+@font-face {
+    font-family: "ProFont";
+    src: url("./assets/ProFontWindows.ttf") format("truetype");
+    font-display: swap;
+    font-style: normal;
+    font-weight: 400;
+}
+
+/*
+ * Standalone defaults are scoped to renderer roots. Hosts can override any
+ * --node-editor-theme-* property without importing a separate design system.
+ */
+:where(.node-editor, .node-dock-workspace) {
+    --node-editor-theme-background: #090b0c;
+    --node-editor-theme-surface: #111518;
+    --node-editor-theme-surface-raised: #182026;
+    --node-editor-theme-surface-hover: #202a31;
+    --node-editor-theme-overlay: rgb(5 8 10 / 92%);
+    --node-editor-theme-text: #edf4f7;
+    --node-editor-theme-muted: #9babb3;
+    --node-editor-theme-border: #2b373e;
+    --node-editor-theme-border-strong: #42515a;
+    --node-editor-theme-danger: #ff6b78;
+    --node-editor-accent: #7dd3fc;
+    --color-bg: var(--node-editor-theme-background);
+    --color-surface: var(--node-editor-theme-surface);
+    --color-surface-raised: var(--node-editor-theme-surface-raised);
+    --color-surface-hover: var(--node-editor-theme-surface-hover);
+    --color-overlay: var(--node-editor-theme-overlay);
+    --color-text: var(--node-editor-theme-text);
+    --color-muted: var(--node-editor-theme-muted);
+    --color-border: var(--node-editor-theme-border);
+    --color-border-strong: var(--node-editor-theme-border-strong);
+    --color-danger: var(--node-editor-theme-danger);
+    --color-accent: var(--node-editor-accent);
+    --font-family-sans: "ProFont", ui-monospace, "Cascadia Mono", monospace;
+    --font-size-ui-sm: 0.75rem;
+    --font-size-ui-md: 0.8125rem;
+    --font-size-ui-lg: 1rem;
+    --font-weight-semibold: 400;
+    --font-weight-bold: 400;
+    --line-height-ui: 1.25;
+    --letter-spacing-ui: 0.02em;
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-6: 1.5rem;
+    --radius-sm: 0.25rem;
+    --radius-md: 0.5rem;
+    --shadow-md: 0 0.75rem 2rem rgb(0 0 0 / 35%);
+    --shadow-lg: 0 1.5rem 4rem rgb(0 0 0 / 48%);
+    --duration-fast: 120ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --focus-ring-width: 2px;
+    --focus-ring: var(--focus-ring-width) solid var(--node-editor-accent);
+    --control-height: 2rem;
+    --workspace-toolbar-height: 2.25rem;
+    --z-raised: 10;
+    --z-sticky: 20;
+    --z-menu: 30;
+    --z-modal: 40;
+}

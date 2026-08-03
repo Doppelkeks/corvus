@@ -1,7 +1,7 @@
 const DEFAULT_ACCENT = Object.freeze([
-    0x87 / 255,
-    0xd6 / 255,
-    0x1f / 255,
+    0x7d / 255,
+    0xd3 / 255,
+    0xfc / 255,
     1
 ]);
 
@@ -39,8 +39,5 @@ export function resolveNodeEditorAccent(element, explicitValue = null) {
     }
     const style = getComputedStyle(element);
     return parsedChannels(style.getPropertyValue("--node-editor-accent"))
-        ?? parsedChannels(style.getPropertyValue("--color-accent"))
-        // Preserve the retired alias only as an external-consumer fallback.
-        ?? parsedChannels(style.getPropertyValue("--accent"))
         ?? [...DEFAULT_ACCENT];
 }

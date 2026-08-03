@@ -15,17 +15,15 @@ describe("GPU font layout", () => {
         );
     });
 
-    it("uses the source font's natural character advances", () => {
-        expect(gpuGlyphAdvance("i", 16)).toBeCloseTo(3);
-        expect(gpuGlyphAdvance("e", 16)).toBeCloseTo(6);
-        expect(gpuGlyphAdvance("W", 16)).toBeCloseTo(10.8);
-        expect(gpuGlyphAdvance("i", 16))
-            .toBeLessThan(gpuGlyphAdvance("W", 16));
+    it("uses ProFont's fixed-width character advances", () => {
+        expect(gpuGlyphAdvance("i", 16)).toBeCloseTo(5.6);
+        expect(gpuGlyphAdvance("e", 16)).toBeCloseTo(5.6);
+        expect(gpuGlyphAdvance("W", 16)).toBeCloseTo(5.6);
     });
 
     it("restores centered atlas glyphs to the natural pen origin", () => {
         expect(gpuGlyphOffsetX("f", 16)).toBeCloseTo(-4.6);
-        expect(gpuGlyphOffsetX("B", 16)).toBeCloseTo(-4);
+        expect(gpuGlyphOffsetX("B", 16)).toBeCloseTo(-3.6);
         expect(gpuGlyphOffsetX(" ", 16)).toBe(0);
     });
 

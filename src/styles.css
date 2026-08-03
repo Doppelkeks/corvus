@@ -1,4 +1,4 @@
-@import "@echo/ui-system/tokens.css";
+@import "./theme.css";
 
 /* Graph canvas and workspace theme --------------------------------------- */
 
@@ -8,7 +8,6 @@
     --node-editor-line: var(--color-border-strong);
     --node-editor-text: var(--color-text);
     --node-editor-muted: var(--color-muted);
-    --node-editor-accent: var(--color-accent);
     --node-editor-drop-layer-z: calc(var(--z-modal) + 1);
     position: relative;
     min-width: 0;

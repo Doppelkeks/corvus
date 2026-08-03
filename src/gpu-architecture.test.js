@@ -18,7 +18,7 @@ describe("GPU-only graph surface architecture", () => {
         expect(fontAtlas).not.toContain("OffscreenCanvas");
         expect(fontAtlas).not.toContain("createElement");
         expect(fontAtlas).not.toContain('getContext("2d"');
-        expect(fontAtlas).toContain("echo-ui-semibold-sdf.png");
+        expect(fontAtlas).toContain("profont-sdf.png");
         expect(fontAtlas).toContain("copyExternalImageToTexture");
         expect(fontAtlas).toContain("GPUTextureUsage.RENDER_ATTACHMENT");
         expect(fontAtlas).toContain("queue.writeTexture");

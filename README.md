@@ -1,8 +1,12 @@
-# `@echo/node-editor`
+# Raykast WebGPU Node Editor
 
 A use-case-agnostic, WebGPU-accelerated node editor for browser applications.
 It knows about nodes, ports, edges, layout, selection, and workspace panels; it
 does not import material, art, compiler, or runtime packages.
+
+```sh
+pnpm add @raykast/webgpu-node-editor
+```
 
 ## Model
 
@@ -38,8 +42,8 @@ const model = {
 ## Editor
 
 ```js
-import { createNodeEditor } from "@echo/node-editor";
-import "@echo/node-editor/styles.css";
+import { createNodeEditor } from "@raykast/webgpu-node-editor";
+import "@raykast/webgpu-node-editor/styles.css";
 
 const editor = createNodeEditor(container, {
   // Prefer lending an existing application device.
@@ -92,11 +96,17 @@ very large.
 
 The surrounding product may use ordinary HTML for dock panels and forms; those
 are application UI, not part of the graph surface. Glyphs come from a
-high-resolution Segoe UI Semibold signed-distance atlas uploaded directly to a
-GPU texture, so the renderer has no hidden Canvas2D or DOM fallback. Regenerate
-the checked-in atlas and its exact per-character layout metrics with
-`python scripts/generate-node-font-atlas.py`; pass `--font` when Mataera's UI font
-lives outside the standard Windows font directory.
+high-resolution ProFont signed-distance atlas uploaded directly to a GPU
+texture, so the renderer has no hidden Canvas2D or DOM fallback. ProFont and
+the generated atlas are MIT-licensed; attribution is recorded in
+`THIRD_PARTY_NOTICES.md`.
+
+Regenerate the checked-in atlas and exact fixed-width layout metrics with:
+
+```sh
+python -m pip install -r requirements-font.txt
+pnpm font:generate
+```
 
 If no `gpuDevice` is supplied, the editor requests a high-performance WebGPU
 device. Applications with an existing GPU runtime should lend that device so
@@ -105,7 +115,7 @@ the graph and application use separate pipelines on one device.
 ## Dockable workspace panels
 
 ```js
-import { createDockLayoutController } from "@echo/node-editor";
+import { createDockLayoutController } from "@raykast/webgpu-node-editor";
 
 const panels = createDockLayoutController(workspace, {
   storageKey: "my-app.workspace.v1",
@@ -146,3 +156,29 @@ and restored with `reset()`. Layout and active tabs are persisted under
 They are covered by package tests and can be reused by alternate host adapters.
 Socket anchors and wire endpoints share the same packed graph coordinates, so
 zoom and pan cannot introduce endpoint drift.
+
+## Theme boundary
+
+`styles.css` includes a complete, scoped default theme and the ProFont webfont.
+It does not import another package or declare global design-system tokens.
+Override the public `--node-editor-theme-*` properties on `.node-editor` or
+`.node-dock-workspace` to integrate the renderer into another product:
+
+```css
+.node-editor {
+  --node-editor-theme-background: #07090b;
+  --node-editor-theme-surface: #101820;
+  --node-editor-theme-text: #f5fbff;
+  --node-editor-accent: #ff8a3d;
+}
+```
+
+## Development
+
+```sh
+pnpm install
+pnpm check
+pnpm dev
+```
+
+The project is available under the MIT License.

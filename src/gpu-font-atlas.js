@@ -12,7 +12,7 @@ const CELL_WIDTH = GPU_FONT_LAYOUT.cellWidth;
 const CELL_HEIGHT = GPU_FONT_LAYOUT.cellHeight;
 const DIAGONAL_DISTANCE = Math.SQRT2;
 const UI_FONT_ATLAS_URL = new URL(
-    "./assets/echo-ui-semibold-sdf.png",
+    "./assets/profont-sdf.png",
     import.meta.url
 );
 let cachedAtlasData = null;
@@ -26,8 +26,8 @@ export const GPU_FONT_ATLAS_METRICS = Object.freeze({
     distanceRange: SIGNED_DISTANCE_RANGE,
     cellWidth: CELL_WIDTH,
     cellHeight: CELL_HEIGHT,
-    family: "Segoe UI Variable Text, Segoe UI, Inter, sans-serif",
-    weight: 600
+    family: "ProFont, ui-monospace, monospace",
+    weight: 400
 });
 
 function distanceToSegment(pointX, pointY, start, end) {
@@ -203,7 +203,7 @@ export function createGpuFontAtlasData() {
 
 function createTexture(device, width, height) {
     const texture = device.createTexture({
-        label: "Node editor Mataera UI signed-distance font atlas",
+        label: "Node editor ProFont signed-distance font atlas",
         size: [width, height],
         format: "rgba8unorm",
         usage: GPUTextureUsage.TEXTURE_BINDING
