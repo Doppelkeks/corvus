@@ -7,6 +7,8 @@ application.
 
 Corvus is open source and developed by [Raykast](https://raykast.com/).
 
+![Corvus WebGPU node editor with a selected node and docked inspector](docs/images/corvus-editor.png)
+
 ## Highlights
 
 - One viewport-sized WebGPU canvas, even when graph coordinates are very large.
@@ -56,6 +58,8 @@ progressively re-packed without blocking interaction.
 
 The generator is isolated in [`demo/stress-scene.js`](demo/stress-scene.js), so
 the large graph is reproducible and does not inflate the normal example.
+
+![Corvus rendering a 10,000-node stress scene with live performance metrics](docs/images/corvus-stress.png)
 
 ## Install
 
