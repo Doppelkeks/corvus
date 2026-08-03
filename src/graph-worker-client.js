@@ -10,6 +10,7 @@ export function workerSafeGraphModel(model) {
             label: node.label,
             type: node.type,
             category: node.category,
+            color: node.color,
             order: node.order,
             terminal: node.terminal,
             preview: node.preview ? {

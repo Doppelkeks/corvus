@@ -2,13 +2,16 @@
 
 /* Graph canvas and workspace theme --------------------------------------- */
 
-.node-editor {
+:where(.node-editor, .node-dock-workspace) {
     --node-editor-bg: var(--color-bg);
     --node-editor-panel: color-mix(in srgb, var(--color-surface) 96%, transparent);
     --node-editor-line: var(--color-border-strong);
     --node-editor-text: var(--color-text);
     --node-editor-muted: var(--color-muted);
     --node-editor-drop-layer-z: calc(var(--z-modal) + 1);
+}
+
+.node-editor {
     position: relative;
     min-width: 0;
     min-height: 0;

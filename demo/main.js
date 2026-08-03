@@ -23,6 +23,7 @@ let model = {
             label: "Request",
             type: "source",
             category: "source",
+            color: [0.17, 0.18, 0.2, 1],
             inputs: [],
             outputs: [{ id: "value", label: "Value", type: "value" }],
             summary: [{ label: "method", value: "GET" }]
@@ -32,6 +33,7 @@ let model = {
             label: "Validate",
             type: "process",
             category: "process",
+            color: [0.2, 0.21, 0.23, 1],
             inputs: [{ id: "input", label: "Input", type: "value" }],
             outputs: [{ id: "value", label: "Value", type: "value" }],
             summary: [{ label: "rules", value: "3" }]
@@ -41,6 +43,7 @@ let model = {
             label: "Response",
             type: "output",
             category: "output",
+            color: [0.16, 0.17, 0.19, 1],
             terminal: true,
             inputs: [{ id: "input", label: "Input", type: "value" }],
             outputs: [],
@@ -79,6 +82,7 @@ const dockLayout = createDockLayoutController(document.querySelector("#workspace
     }]
 });
 const editor = createNodeEditor(container, {
+    accent: "#b8c1ca",
     onRendererChange(status) {
         rendererBackend = status.backend === "error"
             ? "unavailable"
@@ -212,6 +216,7 @@ function addNode() {
             label: `Step ${number}`,
             type: "process",
             category: "process",
+            color: [0.2, 0.21, 0.23, 1],
             inputs: [{ id: "input", label: "Input", type: "value" }],
             outputs: [{ id: "value", label: "Value", type: "value" }],
             summary: [{ label: "mode", value: "ready" }]

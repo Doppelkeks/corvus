@@ -38,6 +38,7 @@ describe("GraphWorkerClient", () => {
             onInspect: () => {},
             nodes: [{
                 ...MODEL.nodes[0],
+                color: [0.2, 0.21, 0.23, 1],
                 hostTexture: { destroy() {} }
             }]
         };
@@ -45,5 +46,6 @@ describe("GraphWorkerClient", () => {
         expect(() => structuredClone(safe)).not.toThrow();
         expect(safe).not.toHaveProperty("onInspect");
         expect(safe.nodes[0]).not.toHaveProperty("hostTexture");
+        expect(safe.nodes[0].color).toEqual([0.2, 0.21, 0.23, 1]);
     });
 });

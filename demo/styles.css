@@ -7,9 +7,9 @@ body {
     width: 100%;
     min-height: 100%;
     margin: 0;
-    background: #050708;
-    color: #edf4f7;
-    font-family: "ProFont", ui-monospace, monospace;
+    background: #17191c;
+    color: #f1f3f5;
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }
 
 body {
@@ -24,17 +24,18 @@ main {
     margin: 0 auto;
     grid-template-rows: auto minmax(32rem, 1fr);
     overflow: hidden;
-    border: 1px solid #2b373e;
+    border: 1px solid #3b4046;
     border-radius: 0.75rem;
-    background: #090b0c;
-    box-shadow: 0 2rem 6rem rgb(0 0 0 / 45%);
+    background: #202328;
+    box-shadow: 0 2rem 6rem rgb(0 0 0 / 32%);
 }
 
 .demo-header {
     display: grid;
     gap: 0.75rem;
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid #2b373e;
+    border-bottom: 1px solid #3b4046;
+    background: #25292e;
 }
 
 .brand-row {
@@ -53,7 +54,7 @@ main {
 
 .demo-header p,
 .demo-header a {
-    color: #7dd3fc;
+    color: #c3cad1;
 }
 
 .demo-header p {
@@ -64,12 +65,12 @@ main {
 .demo-header h1 {
     margin-block: 0.2rem;
     font-size: 1.5rem;
-    font-weight: 400;
+    font-weight: 600;
 }
 
 .demo-header span,
 .demo-header small {
-    color: #9babb3;
+    color: #a9b0b8;
 }
 
 nav {
@@ -81,21 +82,21 @@ nav {
 button {
     min-height: 2.25rem;
     padding: 0.4rem 0.75rem;
-    border: 1px solid #42515a;
+    border: 1px solid #4b5158;
     border-radius: 0.35rem;
-    background: #182026;
-    color: #edf4f7;
+    background: #30353b;
+    color: #f1f3f5;
     font: inherit;
     cursor: pointer;
 }
 
 button:hover {
-    border-color: #7dd3fc;
-    background: #202a31;
+    border-color: #858e98;
+    background: #3a4047;
 }
 
 button:focus-visible {
-    outline: 2px solid #7dd3fc;
+    outline: 2px solid #b8c1ca;
     outline-offset: 2px;
 }
 
@@ -107,6 +108,18 @@ button:focus-visible {
 }
 
 .demo-workspace {
+    --node-editor-theme-background: #1b1e22;
+    --node-editor-theme-surface: #24282d;
+    --node-editor-theme-surface-raised: #2e3339;
+    --node-editor-theme-surface-hover: #383e45;
+    --node-editor-theme-overlay: rgb(27 30 34 / 94%);
+    --node-editor-theme-text: #f0f2f4;
+    --node-editor-theme-muted: #9fa7b0;
+    --node-editor-theme-border: #383d43;
+    --node-editor-theme-border-strong: #555c64;
+    --node-editor-theme-danger: #e19595;
+    --node-editor-accent: #b8c1ca;
+    --font-family-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     display: grid;
     min-width: 0;
     min-height: 0;
@@ -115,25 +128,37 @@ button:focus-visible {
     overflow: hidden;
 }
 
+#editor.node-editor {
+    --node-editor-theme-background: #1b1e22;
+    --node-editor-theme-surface: #24282d;
+    --node-editor-theme-surface-raised: #2e3339;
+    --node-editor-theme-surface-hover: #383e45;
+    --node-editor-theme-text: #f0f2f4;
+    --node-editor-theme-muted: #9fa7b0;
+    --node-editor-theme-border: #383d43;
+    --node-editor-theme-border-strong: #555c64;
+    --node-editor-accent: #b8c1ca;
+}
+
 .demo-dock-left {
     width: 18rem;
     grid-column: 1;
     grid-row: 1;
-    border-inline-end: 1px solid #2b373e;
+    border-inline-end: 1px solid #383d43;
 }
 
 .demo-dock-right {
     width: clamp(17rem, 23vw, 21rem);
     grid-column: 3;
     grid-row: 1;
-    border-inline-start: 1px solid #2b373e;
+    border-inline-start: 1px solid #383d43;
 }
 
 .demo-dock-bottom {
     height: 16rem;
     grid-column: 1 / -1;
     grid-row: 2;
-    border-block-start: 1px solid #2b373e;
+    border-block-start: 1px solid #383d43;
 }
 
 @media (max-width: 44rem) {
