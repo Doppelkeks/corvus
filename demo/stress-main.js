@@ -22,8 +22,11 @@ const metrics = {
     visibleEdges: document.querySelector('[data-metric="visible-edges"]'),
     segments: document.querySelector('[data-metric="segments"]'),
     present: document.querySelector('[data-metric="present"]'),
-    prepare: document.querySelector('[data-metric="prepare"]')
+    prepare: document.querySelector('[data-metric="prepare"]'),
+    liveFps: document.querySelector('[data-metric="live-fps"]'),
+    liveFrame: document.querySelector('[data-metric="live-frame"]')
 };
+const LIVE_PAN_FRAME_COUNT = 30;
 let positions = {};
 let model = null;
 let rendererBackend = "starting";
@@ -44,6 +47,11 @@ function updateRendererMetrics() {
 function scheduleRendererMetrics() {
     cancelAnimationFrame(metricFrame);
     metricFrame = requestAnimationFrame(updateRendererMetrics);
+}
+
+async function waitForRenderedFrame() {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await editor.whenRendererIdle();
 }
 
 const editor = createNodeEditor(container, {
@@ -181,6 +189,54 @@ function pasteNodes(revision, graphPoint) {
     });
 }
 
+function preparationIsCurrent(revision, preparation) {
+    return revision === loadRevision
+        && editor.presented === preparation.presented
+        && editor.prepared === preparation.prepared;
+}
+
+async function measureLivePan(revision, preparation) {
+    const startingView = editor.getView();
+    const frameTimes = new Float64Array(LIVE_PAN_FRAME_COUNT);
+    for (let index = 0; index < LIVE_PAN_FRAME_COUNT; index += 1) {
+        if (!preparationIsCurrent(revision, preparation)) return null;
+        const frameStarted = performance.now();
+        editor.setView({
+            ...startingView,
+            scrollLeft: startingView.scrollLeft + (index % 2) * 0.75
+        });
+        await waitForRenderedFrame();
+        frameTimes[index] = performance.now() - frameStarted;
+    }
+    editor.setView(startingView);
+    await waitForRenderedFrame();
+    if (!preparationIsCurrent(revision, preparation)) return null;
+    let totalFrameTime = 0;
+    for (let index = 0; index < frameTimes.length; index += 1) {
+        totalFrameTime += frameTimes[index];
+    }
+    const frameTime = totalFrameTime / frameTimes.length;
+    return {
+        frameTime,
+        fps: 1000 / frameTime
+    };
+}
+
+async function finishLiveBenchmark(revision, preparation, label) {
+    metrics.liveFps.textContent = "measuring…";
+    metrics.liveFrame.textContent = "forced camera frames";
+    status.textContent = `${rendererBackend} · full graph ready · measuring live pan rendering`;
+    const live = await measureLivePan(revision, preparation);
+    if (!live) return false;
+    metrics.liveFps.textContent = `${live.fps.toFixed(0)} FPS`;
+    metrics.liveFrame.textContent = `${live.frameTime.toFixed(1)} ms / frame`;
+    const renderer = editor.stats();
+    status.textContent = `${rendererBackend} · ${label} · ${number.format(renderer.visibleNodeCount)} nodes in view · ${live.fps.toFixed(0)} FPS live pan`;
+    sizeControl.disabled = false;
+    rebuildButton.disabled = false;
+    return true;
+}
+
 async function presentGraphMutation(revision, label, selection) {
     const preparationStarted = performance.now();
     const preparation = renderStressModel(
@@ -189,7 +245,7 @@ async function presentGraphMutation(revision, label, selection) {
         selection
     );
     await preparation.presented;
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await waitForRenderedFrame();
     if (
         revision !== loadRevision
         || editor.presented !== preparation.presented
@@ -200,9 +256,11 @@ async function presentGraphMutation(revision, label, selection) {
     updateRendererMetrics();
     metrics.present.textContent = `${presentationTime.toFixed(1)} ms`;
     metrics.prepare.textContent = "loading…";
+    metrics.liveFps.textContent = "waiting…";
+    metrics.liveFrame.textContent = "full graph first";
     status.textContent = `${rendererBackend} · ${label} · completing updated graph in background`;
     await preparation.prepared;
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await waitForRenderedFrame();
     if (
         revision !== loadRevision
         || editor.prepared !== preparation.prepared
@@ -212,9 +270,7 @@ async function presentGraphMutation(revision, label, selection) {
     const preparationTime = performance.now() - preparationStarted;
     updateRendererMetrics();
     metrics.prepare.textContent = `${preparationTime.toFixed(1)} ms`;
-    status.textContent = `${rendererBackend} · ${label} · ${number.format(model.nodes.length)} nodes · ${number.format(model.edges.length)} connections · updated in ${preparationTime.toFixed(1)} ms`;
-    sizeControl.disabled = false;
-    rebuildButton.disabled = false;
+    await finishLiveBenchmark(revision, preparation, label);
 }
 
 async function loadScene() {
@@ -224,44 +280,46 @@ async function loadScene() {
     rebuildButton.disabled = true;
     status.textContent = `Building ${number.format(count)} nodes…`;
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    const generationStarted = performance.now();
+    const loadStarted = performance.now();
     const scene = createStressScene(count);
-    const generationTime = performance.now() - generationStarted;
     model = scene.model;
     positions = scene.positions;
     copiedNodeIds = [];
-    const preparationStarted = performance.now();
     const preparation = renderStressModel(
         revision,
         { zoom: 0.5, scrollLeft: 0, scrollTop: 0 }
     );
     await preparation.presented;
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await waitForRenderedFrame();
     if (
         revision !== loadRevision
         || editor.presented !== preparation.presented
     ) {
         return;
     }
-    const presentationTime = performance.now() - preparationStarted;
+    const presentationTime = performance.now() - loadStarted;
     updateRendererMetrics();
     metrics.present.textContent = `${presentationTime.toFixed(1)} ms`;
     metrics.prepare.textContent = "loading…";
-    status.textContent = `${rendererBackend} · graph presented · completing in background`;
+    metrics.liveFps.textContent = "waiting…";
+    metrics.liveFrame.textContent = "full graph first";
+    status.textContent = `${rendererBackend} · first view interactive · completing full graph in background`;
     await preparation.prepared;
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await waitForRenderedFrame();
     if (
         revision !== loadRevision
         || editor.prepared !== preparation.prepared
     ) {
         return;
     }
-    const preparationTime = performance.now() - preparationStarted;
+    const preparationTime = performance.now() - loadStarted;
     updateRendererMetrics();
     metrics.prepare.textContent = `${preparationTime.toFixed(1)} ms`;
-    status.textContent = `${rendererBackend} · progressive loading and viewport culling active · generated in ${generationTime.toFixed(1)} ms`;
-    sizeControl.disabled = false;
-    rebuildButton.disabled = false;
+    await finishLiveBenchmark(
+        revision,
+        preparation,
+        `${number.format(model.nodes.length)} nodes ready`
+    );
 }
 
 sizeControl.addEventListener("change", loadScene);

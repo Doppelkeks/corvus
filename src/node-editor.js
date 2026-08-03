@@ -1428,6 +1428,11 @@ export class NodeEditor {
         this.setPreviewStates(textures);
     }
 
+    async whenRendererIdle() {
+        await this.ready;
+        await this.surface.whenIdle();
+    }
+
     stats() {
         return Object.freeze({
             nodeCount: this.model?.nodes.length ?? 0,

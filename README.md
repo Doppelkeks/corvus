@@ -47,11 +47,14 @@ Open the local URL printed by Vite. The complete host implementation is in
 
 Open `/stress.html` from the same development server to load a deterministic
 5,000-node graph with 5,930 connections and 142,320 potential edge segments.
-The page reports generation, first-presentation, complete-preparation, and live
-visible-work counts. Large scenes present a bounded initial viewport while the
-worker packs the complete graph; viewport culling then submits only on-screen
-nodes, text, previews, and connections to the GPU. Controls can rebuild the
-scene with 1,000, 5,000, or 10,000 nodes. Nodes can be moved, connected,
+The page reports one consistent load timeline: **First view** is time to the
+interactive viewport and **Full graph** is total background preparation from
+the same start. **Live pan** reports FPS and average frame time from a forced
+camera benchmark that waits for submitted WebGPU work. Large scenes present a
+bounded initial viewport while the worker packs the complete graph; viewport
+culling then submits only on-screen nodes, text, previews, and connections to
+the GPU. Controls can rebuild the scene with 1,000, 5,000, or 10,000 nodes.
+Nodes can be moved, connected,
 multi-selected, deleted, duplicated, copied, and pasted; connections can also
 be selected and deleted with Delete or Backspace. Every mutation is
 progressively re-packed without blocking interaction.
@@ -172,6 +175,7 @@ The returned editor provides:
 - `getView()`
 - `getPreviewTargets()`
 - `setPreviewTextures(textures)`
+- `whenRendererIdle()`
 - `stats()`
 - `destroy()`
 

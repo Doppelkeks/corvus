@@ -1003,6 +1003,11 @@ export class WebGpuGraphSurface {
         });
     }
 
+    async whenIdle() {
+        if (!this.device || this.destroyed) return;
+        await this.device.queue.onSubmittedWorkDone();
+    }
+
     #destroySceneBuffers() {
         this.sceneBuffers.forEach((buffer) => buffer.destroy());
         this.sceneBuffers = [];

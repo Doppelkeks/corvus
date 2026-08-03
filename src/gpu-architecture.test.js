@@ -37,6 +37,8 @@ describe("GPU-only graph surface architecture", () => {
         expect(surface).toContain("visibleGlyphIndexBuffer");
         expect(surface).toContain("visibleEdgeIndexBuffer");
         expect(surface).toContain("graphEdgeVisible");
+        expect(surface).toContain("onSubmittedWorkDone");
+        expect(editor).toContain("whenRendererIdle");
         expect(surface).toContain("backdropShapeCount + foregroundUnderlayCount");
         expect(shaders).toContain("visibleShapes[visibleIndex]");
         expect(shaders).toContain("visibleEdges[visibleEdgeIndex]");

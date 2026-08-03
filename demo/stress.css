@@ -33,7 +33,7 @@
 
 .stress-metrics {
     display: grid;
-    grid-template-columns: repeat(7, minmax(6.2rem, 1fr));
+    grid-template-columns: repeat(8, minmax(5.4rem, 1fr));
     margin: 0;
     gap: 1px;
     overflow: hidden;
@@ -65,6 +65,24 @@
     font-weight: 600;
 }
 
+.stress-live-metric {
+    display: grid;
+    gap: 0.1rem;
+}
+
+.stress-live-metric small {
+    color: #9da5ad;
+    font-size: 0.68rem;
+    font-weight: 500;
+}
+
+.stress-metric-help {
+    margin: 0.55rem 0 0;
+    color: #8f979f;
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
 @media (max-width: 52rem) {
     .stress-controls {
         align-items: stretch;
@@ -72,6 +90,6 @@
     }
 
     .stress-metrics {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
     }
 }

@@ -30,14 +30,24 @@
                     </nav>
                 </div>
                 <dl class="stress-metrics" aria-label="Stress scene metrics">
-                    <div><dt>Total nodes</dt><dd data-metric="nodes">—</dd></div>
-                    <div><dt>Visible nodes</dt><dd data-metric="visible-nodes">—</dd></div>
-                    <div><dt>Total edges</dt><dd data-metric="edges">—</dd></div>
-                    <div><dt>Visible edges</dt><dd data-metric="visible-edges">—</dd></div>
-                    <div><dt>Submitted segments</dt><dd data-metric="segments">—</dd></div>
-                    <div><dt>Presented</dt><dd data-metric="present">—</dd></div>
-                    <div><dt>Complete</dt><dd data-metric="prepare">—</dd></div>
+                    <div><dt>Nodes</dt><dd data-metric="nodes">—</dd></div>
+                    <div><dt>Nodes in view</dt><dd data-metric="visible-nodes">—</dd></div>
+                    <div><dt>Connections</dt><dd data-metric="edges">—</dd></div>
+                    <div><dt>Connections in view</dt><dd data-metric="visible-edges">—</dd></div>
+                    <div><dt>Segments / frame</dt><dd data-metric="segments">—</dd></div>
+                    <div><dt>First view</dt><dd data-metric="present">—</dd></div>
+                    <div><dt>Full graph</dt><dd data-metric="prepare">—</dd></div>
+                    <div>
+                        <dt>Live pan</dt>
+                        <dd class="stress-live-metric">
+                            <span data-metric="live-fps">—</span>
+                            <small data-metric="live-frame"></small>
+                        </dd>
+                    </div>
                 </dl>
+                <p class="stress-metric-help">
+                    First view is time to the interactive viewport. Full graph is total background preparation from the same start. Live pan averages continuously rendered camera frames and waits for WebGPU completion.
+                </p>
             </header>
             <section id="editor" aria-label="Corvus WebGPU stress scene"></section>
         </main>
